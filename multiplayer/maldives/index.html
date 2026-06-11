@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>MALDIVES OCEAN RESORT — 中村ゼミ</title>
+<link rel="icon" href="data:,">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; background: #02141a; overflow: hidden;
+    font-family: "Hiragino Sans", "Helvetica Neue", system-ui, sans-serif; color: #e9fffb; }
+  canvas { display: block; width: 100vw; height: 100vh; touch-action: none; }
+
+  /* ── login (name only) ── */
+  #login { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(circle at 50% 35%, #0a3a42, #02141a 70%); }
+  #login-card { width: min(92vw, 420px); background: rgba(8,30,36,.85); border: 1px solid rgba(60,220,205,.4);
+    border-radius: 16px; padding: 30px 28px; backdrop-filter: blur(10px); box-shadow: 0 12px 50px rgba(0,80,90,.45); }
+  #login-card h1 { font-size: 22px; letter-spacing: .06em; margin-bottom: 4px;
+    background: linear-gradient(90deg,#36e2d2,#7bd0ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  #login-card .sub { font-size: 12.5px; opacity: .8; margin-bottom: 20px; line-height: 1.6; }
+  #login-card label { display: block; font-size: 13px; opacity: .85; margin-bottom: 7px; }
+  #name-input { width: 100%; padding: 12px 14px; font-size: 16px; color: #eafffc;
+    background: rgba(10,44,50,.9); border: 1px solid rgba(70,220,205,.45); border-radius: 10px; outline: none; }
+  #name-input:focus { border-color: #36e2d2; box-shadow: 0 0 0 3px rgba(54,226,210,.18); }
+  #enter-btn { width: 100%; margin-top: 18px; padding: 13px; font-size: 16px; font-weight: 700; color: #04282d;
+    background: linear-gradient(135deg,#36e2d2,#58b8ff); border: none; border-radius: 10px; cursor: pointer; }
+  #enter-btn:hover { filter: brightness(1.1); }
+  #login-note { margin-top: 16px; font-size: 11.5px; line-height: 1.7; opacity: .65; }
+  #login-err { margin-top: 10px; font-size: 12px; color: #ff9da8; min-height: 1em; }
+
+  /* ── loading ── */
+  #loading { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 14px; background: radial-gradient(circle at 50% 40%, #0a3a42, #02141a 70%); z-index: 100; }
+  #loading .spinner { width: 42px; height: 42px; border: 3px solid rgba(60,220,205,.25);
+    border-top-color: #36e2d2; border-radius: 50%; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { #loading .spinner { animation: none; } }
+  #loading-text { font-size: 14px; opacity: .85; }
+  #loading.hidden { display: none; }
+  #gpu-warn { max-width: 460px; text-align: center; line-height: 1.6; font-size: 14px;
+    background: rgba(6,28,32,.85); border: 1px solid rgba(70,210,200,.5); padding: 18px 22px; border-radius: 12px; }
+
+  /* ── HUD ── */
+  #hud { position: fixed; top: 12px; left: 12px; z-index: 50; background: rgba(4,24,28,.6);
+    border: 1px solid rgba(70,220,205,.3); border-radius: 10px; padding: 7px 12px; font-size: 13px; backdrop-filter: blur(6px); }
+  #hud.hidden { display: none; }
+  #share-label { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 50;
+    background: rgba(6,30,34,.75); border: 1px solid rgba(70,220,205,.45); border-radius: 999px;
+    padding: 6px 16px; font-size: 12.5px; display: none; }
+  #share-label.visible { display: block; }
+
+  .iconbtn { position: fixed; z-index: 50; width: 44px; height: 44px; border-radius: 50%;
+    background: rgba(5,26,30,.65); border: 1px solid rgba(70,220,205,.35); color: #d8fff8;
+    cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; }
+  .iconbtn:hover { background: rgba(70,220,205,.2); }
+  .iconbtn.active { background: linear-gradient(135deg,#c0392b,#e74c3c); border-color: rgba(231,76,60,.7); color:#fff; }
+  .iconbtn.hidden { display: none; }
+  #voice-btn { top: 12px; right: 12px; }
+  #screen-share-btn { top: 64px; right: 12px; }
+  #screen-share-btn.active { background: linear-gradient(135deg,#1f9fa8,#36e2d2); border-color: rgba(90,230,215,.8); color:#04282d; }
+
+  #hint { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 40;
+    background: rgba(4,24,28,.55); border: 1px solid rgba(70,220,205,.25); border-radius: 8px; padding: 6px 14px; font-size: 12px; opacity: .88; }
+  #hint .k { display:inline-block; padding:1px 6px; margin:0 2px; border:1px solid rgba(90,230,215,.4);
+    border-radius:4px; background:rgba(70,220,205,.12); font-size:11px; }
+  #hint.hidden { display:none; }
+  #crosshair { position: fixed; top: 50%; left: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px;
+    border-radius: 50%; background: rgba(255,255,255,.5); z-index: 30; pointer-events: none; }
+
+  #joystick { position: fixed; left: 22px; bottom: 22px; width: 130px; height: 130px; z-index: 45; }
+  #fly-btn { right: 22px; bottom: 26px; width: 70px; height: 70px; font-size: 20px;
+    background: rgba(40,160,160,.4); border-color: rgba(90,230,215,.6); }
+  @media (hover: hover) and (pointer: fine) { #joystick, #fly-btn { display: none; } }
+</style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+
+  <!-- name-only login -->
+  <div id="login">
+    <form id="login-card">
+      <h1>MALDIVES OCEAN RESORT 🌊</h1>
+      <div class="sub">モルディブの水上ヴィラリゾートへようこそ。<br>名前を入れるだけで入場できます。</div>
+      <label for="name-input">名前（ニックネーム可）</label>
+      <input id="name-input" type="text" maxlength="30" autocomplete="name" placeholder="例: なかむら">
+      <button id="enter-btn" type="submit">入場する</button>
+      <div id="login-err"></div>
+      <div id="login-note">
+        同じ空間にいる人とアバター・音声（🎙️）・画面共有（🖥️ 沖合の巨大スクリーン）でつながります。<br>
+        音声と共有はこの空間内だけに届きます。
+      </div>
+    </form>
+  </div>
+
+  <div id="hud" class="hidden"><span id="hud-name">--</span>
+    <span style="opacity:.5;margin:0 6px;">|</span>🌊 MALDIVES
+    <span style="opacity:.5;margin:0 6px;">|</span><span id="hud-count">1</span>人</div>
+  <div id="share-label"></div>
+
+  <button id="voice-btn" class="iconbtn hidden" title="マイク ON/OFF" aria-label="マイク ON/OFF"><i>🔇</i></button>
+  <button id="screen-share-btn" class="iconbtn hidden" title="画面共有（沖合の巨大スクリーンに表示）" aria-label="画面共有">🖥️</button>
+
+  <div id="crosshair" style="display:none"></div>
+  <div id="hint" class="hidden">
+    <span class="k">WASD</span>移動 ・ マウス視点 ・ <span class="k">Space</span>長押しで飛行 ・ クリックで視点固定
+  </div>
+
+  <div id="joystick"></div>
+  <button id="fly-btn" class="iconbtn" title="飛行（長押し）" aria-label="飛行（長押し）">🕊️</button>
+
+  <div id="loading" class="hidden"><div class="spinner"></div><div id="loading-text">リゾートをひらいています…</div></div>
+
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/nipplejs@0.10.1/dist/nipplejs.min.js"></script>
+  <script type="importmap">
+  {
+    "imports": {
+      "three":         "https://cdn.jsdelivr.net/npm/three@0.179.0/build/three.webgpu.js",
+      "three/webgpu":  "https://cdn.jsdelivr.net/npm/three@0.179.0/build/three.webgpu.js",
+      "three/tsl":     "https://cdn.jsdelivr.net/npm/three@0.179.0/build/three.tsl.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.179.0/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module" src="./maldives.js"></script>
+</body>
+</html>
