@@ -377,6 +377,20 @@ class MaldivesSpace extends SpaceCore {
     // 各ヴィラ（回転後: 上段デッキは world-x が奥行き、world-z が幅）
     for (let i = 0; i < L.VILLA_COUNT; i += 1) {
       const vz = L.VILLA_FIRST_Z - i * L.VILLA_SPACING;
+      // 茅葺き屋根（4角錐）: 屋根面より上にいる時だけ足場になる
+      // （ConeGeometry(5.2, 2.8, 4)回転45°: 半幅3.68 / 軒4.05m / 頂点6.85m）
+      {
+        const lx = z - vz;
+        const lz = -(x - L.VILLA_CENTER_X);
+        const m = Math.max(Math.abs(lx), Math.abs(lz));
+        const ROOF_HALF = 3.68;
+        const ROOF_APEX = 6.85;
+        const ROOF_BASE = 4.05;
+        if (m <= ROOF_HALF) {
+          const roofY = ROOF_APEX - ((ROOF_APEX - ROOF_BASE) / ROOF_HALF) * m;
+          if (this.position.y > roofY - 0.35) return roofY;
+        }
+      }
       // 接続通路
       if (
         x >= L.JETTY_WIDTH / 2 && x <= L.VILLA_CENTER_X - L.DECK_D / 2 &&
