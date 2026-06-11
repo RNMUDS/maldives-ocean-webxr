@@ -38,9 +38,21 @@ const SEABED_Y = -3;
 // ── 島の衝突（resort.js の配置と一致させる） ──
 const ISLAND_CX = -8;
 const ISLAND_CZ = LAYOUT.JETTY_START_Z - LAYOUT.JETTY_LENGTH - 28;
-const ISLAND_RX = 44;   // 20 * scale2.2
-const ISLAND_RZ = 30.8; // 20 * scale2.2 * 0.7
-const ISLAND_H = 4.4;   // 砂丘の最大高さ
+const ISLAND_RX = 44;    // 20 * scale2.2
+const ISLAND_RZ = 31.68; // 20 * scale2.2 * 0.72
+const ISLAND_H = 3.08;   // 20 * 0.07 * scale2.2（island.jsの砂ドーム実高）
+// 砂州（island.js sandSpit: 半径20球を scale*0.55/0.05/0.42、位置 +scale*13/+scale*6）
+const SPIT_CX = ISLAND_CX + 2.2 * 13;
+const SPIT_CZ = ISLAND_CZ + 2.2 * 6;
+const SPIT_RX = 20 * 2.2 * 0.55;
+const SPIT_RZ = 20 * 2.2 * 0.42;
+const SPIT_H = 20 * 0.05 * 2.2;
+// 遠景島（resort.js: createIsland(1.4) @ (170, 0, -180)）
+const FAR_CX = 170;
+const FAR_CZ = -180;
+const FAR_RX = 20 * 1.4;
+const FAR_RZ = 20 * 1.4 * 0.72;
+const FAR_H = 20 * 0.07 * 1.4;
 
 function makePlaceholderTexture() {
   const cv = document.createElement('canvas');
@@ -100,6 +112,13 @@ class MaldivesSpace extends SpaceCore {
     hideLoading();
   }
 
+  // セミナー空間用のゾーン分離音響（ポスター島のG1-G6円）はこの空間では
+  // 無効化する。有効のままだとスポーン横の海上に不可視の「無音ゾーン」ができる
+  async _setupVoice() {
+    await super._setupVoice();
+    if (this.voice) this.voice.zoneIsolationEnabled = false;
+  }
+
   // 全体配信の状態同期（/gw/と同じサーバーイベントを利用）。
   // 配信中の人の声は距離に関係なく全員にフルボリュームで届く
   _wireBroadcastSync() {
@@ -117,6 +136,17 @@ class MaldivesSpace extends SpaceCore {
         const real = this.socket?.users?.get(d.socketId)?.position;
         if (real) this.voice?.updateRemoteUserPosition?.(d.socketId, real);
       }
+    });
+    // 再接続するとsocket.idが変わりサーバー側の配信フラグが失われるため、
+    // 配信中なら再申告する（しないとUIだけ配信中のサイレント故障になる）
+    this.socket.on('reconnected', () => {
+      if (this._broadcasting) {
+        try { raw.emit('gw-broadcast-mode', { on: true }); } catch {}
+      }
+    });
+    // 切断した配信者を残したままにしない（毎フレームの位置注入が残り続ける）
+    this.socket.on('user-disconnected', (sid) => {
+      this.broadcastingSockets.delete(sid?.socketId ?? sid);
     });
   }
 
@@ -384,6 +414,10 @@ class MaldivesSpace extends SpaceCore {
     const want = !!pose;
     if (want !== this._bcamOn) { this._bcamOn = want; this._applyDefaultContent(); }
     if (!want) return;
+    // WaterMeshの平面反射がカメラ別にフルシーンを再描画するため、
+    // 放送カメラの更新は間引いて負荷を抑える（WebGL2モバイルは特に重い）
+    this._bcamFrame = (this._bcamFrame | 0) + 1;
+    if (this._bcamFrame % (this.renderer.backend?.isWebGPUBackend ? 2 : 3)) return;
     try {
       // 先生の正面3.5m・少し上から全身を狙う（イーズ追従）
       const facingX = -Math.sin(pose.yaw);
@@ -398,17 +432,24 @@ class MaldivesSpace extends SpaceCore {
       this._bcamAim.set(pose.pos.x, pose.pos.y + 0.1, pose.pos.z);
       this._bcamLook.lerp(this._bcamAim, 0.1);
       this._bcam.lookAt(this._bcamLook);
-      // スクリーンが自分自身を映さないよう描画中は隠す
+      // スクリーンが自分自身を映さないよう描画中は隠す。
+      // WebGL2経路では水面も隠し、放送カメラ用の反射再描画を丸ごと省く
+      const hideWater = !this.renderer.backend?.isWebGPUBackend;
       for (const m of this._screenMeshes) m.visible = false;
+      if (hideWater) this.ocean.water.visible = false;
       this.renderer.setRenderTarget(this._bcamRT);
       await this.renderer.renderAsync(this.scene, this._bcam);
       this.renderer.setRenderTarget(null);
       for (const m of this._screenMeshes) m.visible = true;
+      if (hideWater) this.ocean.water.visible = true;
     } catch (e) {
       // 失敗したらカメラ機能を畳み、案内画面に戻す（fail-open）
       if (!this._bcamErrLogged) { this._bcamErrLogged = true; console.warn('[maldives] bcam render failed:', e?.message ?? e); }
       try { this.renderer.setRenderTarget(null); } catch {}
       for (const m of this._screenMeshes) m.visible = true;
+      this.ocean.water.visible = true;
+      try { this._bcamRT.dispose(); } catch {}
+      if (this._bcamMat) this._bcamMat.map = null;
       this._bcamRT = null;
       this._bcamOn = false;
       this._applyDefaultContent();
@@ -426,19 +467,38 @@ class MaldivesSpace extends SpaceCore {
   // ── screen share (SFU video, /internship/ と同じスタック) ──
   _wireScreenShare() {
     const btn = document.getElementById('screen-share-btn');
-    if (!navigator.mediaDevices?.getDisplayMedia) { btn?.classList.add('hidden'); }
-    else {
+    if (!navigator.mediaDevices?.getDisplayMedia || !this.voice?.isJoined) {
+      // 共有不可（API無し or SFU接続失敗）の間はボタンを出さない
+      btn?.classList.add('hidden');
+      if (!this.voice?.isJoined) console.warn('[maldives] SFU未接続のため共有ボタンを非表示');
+    } else {
       btn?.classList.remove('hidden');
       btn?.addEventListener('click', () => this._toggleShare(btn));
     }
 
     this.voice.on('videoProducerAdded', ({ producerId, videoEl, socketId }) => {
       if (this.voice.screenProducer?.id === producerId) return;   // 自分のエコー
-      if (this._shares.has(producerId)) return;
+      // SFU再接続後は同じproducerIdが新しいvideoElで再consumeされる。
+      // 旧エントリのまま弾くとスクリーンが死んだ映像で固まるため差し替える
+      const old = this._shares.get(producerId);
+      if (old) {
+        if (old.videoEl === videoEl) return;
+        try { old.texture.dispose(); } catch {}
+        try { old.videoEl.remove(); } catch {}
+      }
       const texture = this._makeVideoTexture(videoEl);
       this._shares.set(producerId, { texture, videoEl, socketId, userName: this._shareName(socketId) });
-      this._activateShare(producerId);
+      if (!old || this._activeShareId === producerId) this._activateShare(producerId);
     });
+    // 自分の共有がSFU側で閉じられた（socket再接続→initialize→dispose等）のに
+    // UIが「共有中」のまま残るのを防ぐ。_stopLocalShareは先に_localShareを
+    // null化するため、ここからの再入はガードされ無限ループしない
+    this.voice.on('screenProducerStopped', () => {
+      if (this._localShare && !this.voice.screenProducer) {
+        this._stopLocalShare(document.getElementById('screen-share-btn'));
+      }
+    });
+
     this.voice.on('videoProducerRemoved', ({ producerId }) => {
       const entry = this._shares.get(producerId);
       if (!entry) return;
@@ -547,7 +607,12 @@ class MaldivesSpace extends SpaceCore {
     this._shareBusy = true;
     try {
       if (this._localShare) { await this._stopLocalShare(btn); return; }
-      if (!this.voice?.isJoined) { console.warn('[maldives] voice not joined yet — cannot share'); return; }
+      if (!this.voice?.isJoined) {
+        // ユーザーに見える形で通知する（console.warnだけだと無反応に見える）
+        this._setShareLabel('音声サーバーに接続できないため画面共有できません');
+        setTimeout(() => { if (!this._activeShareId) this._setShareLabel(null); }, 4000);
+        return;
+      }
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: { cursor: 'always', width: { ideal: 1920, max: 1920 }, height: { ideal: 1080, max: 1080 }, frameRate: { ideal: 15, max: 30 } },
         audio: false,
@@ -622,6 +687,11 @@ class MaldivesSpace extends SpaceCore {
         Math.abs(x - L.VILLA_CENTER_X) <= L.DECK_D / 2 &&
         Math.abs(z - vz) <= L.DECK_W / 2
       ) return DECK_HEIGHT;
+      // プール内は水面の高さを歩く（プール床へのめり込み防止）
+      if (
+        x >= L.VILLA_CENTER_X + L.DECK_D / 2 + 1.9 && x <= L.VILLA_CENTER_X + L.DECK_D / 2 + 4.5 &&
+        z >= vz + 0.5 && z <= vz + 3.7
+      ) return L.LOWER_DECK_TOP + 0.34;
       // 下段（プール）デッキ
       if (
         x >= L.VILLA_CENTER_X + L.DECK_D / 2 && x <= L.VILLA_CENTER_X + L.DECK_D / 2 + 4.5 &&
@@ -629,11 +699,22 @@ class MaldivesSpace extends SpaceCore {
       ) return L.LOWER_DECK_TOP;
     }
 
-    // 島の砂浜（楕円ドーム）
+    // 島の砂浜（本体ドーム＋砂州ドームの高い方）
     const qx = (x - ISLAND_CX) / ISLAND_RX;
     const qz = (z - ISLAND_CZ) / ISLAND_RZ;
     const q = qx * qx + qz * qz;
-    if (q < 1) return ISLAND_H * Math.sqrt(1 - q);
+    const mainH = q < 1 ? ISLAND_H * Math.sqrt(1 - q) : 0;
+    const sx = (x - SPIT_CX) / SPIT_RX;
+    const sz = (z - SPIT_CZ) / SPIT_RZ;
+    const qs = sx * sx + sz * sz;
+    const spitH = qs < 1 ? SPIT_H * Math.sqrt(1 - qs) : 0;
+    if (mainH > 0 || spitH > 0) return Math.max(mainH, spitH);
+
+    // 遠景島（移動可能範囲内にあるため貫通しないよう足場を持つ）
+    const fx = (x - FAR_CX) / FAR_RX;
+    const fz = (z - FAR_CZ) / FAR_RZ;
+    const fq = fx * fx + fz * fz;
+    if (fq < 1) return FAR_H * Math.sqrt(1 - fq);
 
     return 0; // 海面（波の上を歩ける）
   }
@@ -641,13 +722,18 @@ class MaldivesSpace extends SpaceCore {
   // ── main loop ──
   _loop() {
     this.clock = new THREE.Clock();
+    // ダンスボートは「全プレイヤーがほぼ同じ光景を見る」決定的アニメーション。
+    // クライアントごとの経過時間ではなく壁時計ベースの共有時刻で駆動する
+    // （固定エポック減算でfloat精度を確保）
+    const SHARED_EPOCH_MS = 1750000000000;
     this.renderer.setAnimationLoop(async () => {
       const dt = Math.min(this.clock.getDelta(), 0.05);
       const t = this.clock.elapsedTime;
+      const sharedT = (Date.now() - SHARED_EPOCH_MS) / 1000;
       this._step(dt, t);
       this.resort.update(t);
       this.marine.update(t);
-      this.danceBoat.update(t);
+      this.danceBoat.update(sharedT);
       await this._updateBroadcast();
       try { await this.renderer.renderAsync(this.scene, this.camera); }
       catch (e) {

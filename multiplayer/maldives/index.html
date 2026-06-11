@@ -67,7 +67,9 @@
   #screen-share-btn.active { background: linear-gradient(135deg,#1f9fa8,#36e2d2); border-color: rgba(90,230,215,.8); color:#04282d; }
 
   #hint { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 40;
-    background: rgba(4,24,28,.55); border: 1px solid rgba(70,220,205,.25); border-radius: 8px; padding: 6px 14px; font-size: 12px; opacity: .88; }
+    background: rgba(4,24,28,.55); border: 1px solid rgba(70,220,205,.25); border-radius: 8px; padding: 6px 14px; font-size: 12px; opacity: .88;
+    pointer-events: none; /* 下のcanvasタッチ操作を遮らない */ }
+  @media (hover: none) { #hint { display: none; } } /* 内容がデスクトップ操作の説明のため */
   #hint .k { display:inline-block; padding:1px 6px; margin:0 2px; border:1px solid rgba(90,230,215,.4);
     border-radius:4px; background:rgba(70,220,205,.12); font-size:11px; }
   #hint.hidden { display:none; }

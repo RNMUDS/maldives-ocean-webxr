@@ -499,6 +499,9 @@ export function createMarineLife(scene) {
     const { batches, members } = tropical;
     const predatorPosition = chain.medium.mesh.position;
     const predatorHunting = chain.medium.mode !== 'dead';
+    // 追跡対象の個体は散開させない — 散開すると描画位置と捕食判定の
+    // 解析位置が約3mずれ、「何もない場所で魚が消える」見た目になる
+    const chaseTarget = chain.medium.mode === 'chase' ? chain.medium.targetIndex : -1;
     for (let i = 0; i < members.length; i += 1) {
       const m = members[i];
       // 食べられた個体は非表示にし、時間が経つと群れに補充される
@@ -515,8 +518,8 @@ export function createMarineLife(scene) {
       tropicalPosition(m, time, posNow);
       tropicalPosition(m, time + HEADING_LOOKAHEAD, posAhead);
 
-      // 捕食者が近いと反対方向へ散開して逃げる
-      if (predatorHunting) {
+      // 捕食者が近いと反対方向へ散開して逃げる（追跡対象は除く）
+      if (predatorHunting && i !== chaseTarget) {
         scatterVec.subVectors(posNow, predatorPosition);
         const dist = scatterVec.length();
         if (dist < FLEE_RADIUS && dist > 0.001) {

@@ -272,7 +272,9 @@ export function createDanceBoat(scene) {
     // ── 少年のダンス: 3フェーズ・ループ ──
     const p = (t % DANCE_PERIOD) / DANCE_PERIOD;
     const beat = t * BEAT_HZ * Math.PI;
-    const wBounce = Math.max(phaseWindow(p, 0.0, 0.34), phaseWindow(p, 0.72, 1.0, 0.03));
+    // 継ぎ目側のエッジ中心を定義域[0,1)の外へ出し、ループ境界(p=1→0)で
+    // 重みが0.5に落ちて腕が脱力する「ヒッチ」を防ぐ
+    const wBounce = Math.max(phaseWindow(p, -0.1, 0.34), phaseWindow(p, 0.72, 1.1, 0.03));
     const wSpread = phaseWindow(p, 0.34, 0.55);
     const wPoint = phaseWindow(p, 0.55, 0.72);
 
