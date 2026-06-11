@@ -37,7 +37,7 @@ const MODES = {
     rayleigh: 3,
     waterColor: 0x001e0f,     // 公式oceanデモと同じ暗い深緑
     sunElevation: 2.5,
-    sunAzimuth: 188,          // 桟橋の先（島の方向）に光の道ができる
+    sunAzimuth: 210,          // スポーンの視点で視野の左寄りに夕日が見える
     distortionScale: 3.7,
     fogColor: 0x2a1a10,
     fogDensity: 0.00012,
