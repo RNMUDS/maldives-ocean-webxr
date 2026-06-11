@@ -487,7 +487,10 @@ class MaldivesSpace extends SpaceCore {
     if (!entry.videoEl._fitWired) {
       entry.videoEl._fitWired = true;
       entry.videoEl.addEventListener('resize', () => {
-        if (this._videoEl === entry.videoEl) this._fitScreensToVideo();
+        if (this._videoEl !== entry.videoEl) return;
+        // 共有ウィンドウのリサイズで映像サイズが変わると、GPUテクスチャの
+        // 確保サイズと食い違って描画が固まるため、テクスチャを作り直す
+        this._rebuildShareTexture(producerId);
       });
     }
     this._videoMat.map = entry.texture;
@@ -495,6 +498,20 @@ class MaldivesSpace extends SpaceCore {
     for (const m of this._screenMeshes) m.material = this._videoMat;
     this._fitScreensToVideo();
     this._setShareLabel(producerId === 'local' ? 'あなたの画面をオーシャンスクリーンに表示中' : `${entry.userName} さんの画面を表示中`);
+  }
+
+  // アクティブな共有のVideoTextureを破棄して作り直す
+  // （映像サイズ変更後の固まり・破損からの回復用）
+  _rebuildShareTexture(id) {
+    const entry = id === 'local' ? this._localShare : this._shares.get(id);
+    if (!entry || !entry.videoEl) return;
+    try { entry.texture.dispose(); } catch {}
+    entry.texture = this._makeVideoTexture(entry.videoEl);
+    if (this._activeShareId === id) {
+      this._videoMat.map = entry.texture;
+      this._videoMat.needsUpdate = true;
+      this._fitScreensToVideo();
+    }
   }
 
   _activateNextShare() {
@@ -633,7 +650,16 @@ class MaldivesSpace extends SpaceCore {
       this.danceBoat.update(t);
       await this._updateBroadcast();
       try { await this.renderer.renderAsync(this.scene, this.camera); }
-      catch (e) { if (!this._renderErrLogged) { this._renderErrLogged = true; console.warn('[maldives] render error:', e?.message ?? e); } }
+      catch (e) {
+        if (!this._renderErrLogged) { this._renderErrLogged = true; console.warn('[maldives] render error:', e?.message ?? e); }
+        // 共有テクスチャ起因の描画停止なら作り直して自己回復を試みる
+        // （波などシーン全体のフリーズを永続させない）
+        const now = performance.now();
+        if (this._activeShareId && (!this._lastShareRecover || now - this._lastShareRecover > 2000)) {
+          this._lastShareRecover = now;
+          this._rebuildShareTexture(this._activeShareId);
+        }
+      }
     });
   }
 
