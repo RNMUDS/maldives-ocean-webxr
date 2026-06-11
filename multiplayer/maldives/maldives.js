@@ -308,11 +308,14 @@ class MaldivesSpace extends SpaceCore {
   _setupBroadcastCam() {
     this._bcam = new THREE.PerspectiveCamera(32, 16 / 9, 0.3, 800);
     this._bcamRT = new THREE.RenderTarget(960, 540);
-    // WebGPUのレンダーターゲットはV反転するためUVで戻す
     this._bcamRT.texture.wrapS = THREE.ClampToEdgeWrapping;
     this._bcamRT.texture.wrapT = THREE.ClampToEdgeWrapping;
-    this._bcamRT.texture.repeat.set(1, -1);
-    this._bcamRT.texture.offset.set(0, 1);
+    // レンダーターゲットのV軸はWebGPUバックエンドのみ反転する。
+    // WebGL2経路（iPhone等）で同じ補正をすると逆さまになるため条件分岐
+    if (this.renderer.backend?.isWebGPUBackend) {
+      this._bcamRT.texture.repeat.set(1, -1);
+      this._bcamRT.texture.offset.set(0, 1);
+    }
     this._bcamMat = new THREE.MeshBasicMaterial({ map: this._bcamRT.texture, toneMapped: false });
     this._bcamPos = new THREE.Vector3(0, 3, 20);
     this._bcamLook = new THREE.Vector3(0, 1.5, 0);
