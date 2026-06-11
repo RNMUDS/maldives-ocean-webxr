@@ -1,6 +1,6 @@
 // 「夜の踊り子」(アオサ王子) オマージュ:
-//   • 船は赤いカナディアンカヌー（参照: camp-inn-miyama のOld Town型）。
-//     両端が反り上がって尖る開放艇・黒いガンネル・木製シート・白ロゴ。
+//   • 船は Sketchfab の "Wooden Boat" (o0ozexo0o, CC-BY) を使用。
+//     https://sketchfab.com/3d-models/wooden-boat-55118b23a5494e4b81eed831b9f8c871
 //   • 舳先に立つ小柄な少年: フィン型の黒帽子・サングラス・
 //     赤プリント入り黒T・黒短パン・裸足。
 //   • ダンスは3フェーズのループ:
@@ -10,6 +10,7 @@
 //   • 後ろでは大人2人が木のシングルブレードパドルで必死に漕ぐ。
 // 時刻ベースの決定的アニメーション（全プレイヤーがほぼ同じ光景を見る）。
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 const PATH_CENTER = new THREE.Vector3(-50, 0, -52);
 const PATH_RADIUS = 28;
@@ -20,115 +21,6 @@ const DANCE_PERIOD = 10.9;      // フェーズ一巡の長さ(s) ≒ 24拍
 const HULL_LEN = 4.6;
 const HULL_H = 0.5;             // ガンネル（縁）の高さ
 const SEAT_Y = 0.34;            // シート上面
-
-// ── 赤いカナディアンカヌー ──
-function createCanoe() {
-  const canoe = new THREE.Group();
-  const red = new THREE.MeshStandardMaterial({ color: 0xa8242a, roughness: 0.45 });
-  const interior = new THREE.MeshStandardMaterial({ color: 0xb89878, roughness: 0.9 });
-  const gunwale = new THREE.MeshStandardMaterial({ color: 0x16181a, roughness: 0.6 });
-  const wood = new THREE.MeshStandardMaterial({ color: 0xc8a060, roughness: 0.8 });
-
-  // 底板と内側の床（開放艇 — デッキは無い）
-  const bottom = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.07, HULL_LEN - 1.2), red);
-  bottom.position.y = 0.05;
-  canoe.add(bottom);
-  const floor = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.04, HULL_LEN - 1.3), interior);
-  floor.position.y = 0.1;
-  canoe.add(floor);
-
-  // 側板（やや外開き）— 外面は赤、内面は明るい内装色
-  for (const sx of [-1, 1]) {
-    const side = new THREE.Mesh(new THREE.BoxGeometry(0.06, HULL_H, HULL_LEN - 1.0), red);
-    side.rotation.z = sx * 0.14;
-    side.position.set(sx * 0.37, 0.26, 0);
-    canoe.add(side);
-    const inner = new THREE.Mesh(new THREE.BoxGeometry(0.015, HULL_H - 0.1, HULL_LEN - 1.15), interior);
-    inner.rotation.z = sx * 0.14;
-    inner.position.set(sx * 0.33, 0.26, 0);
-    canoe.add(inner);
-  }
-
-  // 先細りの船首・船尾（尖りは外向き）＋反り上がるステム
-  for (const end of [1, -1]) {
-    // 平面視の先細り（潰した四角錐、尖端が外）
-    const taper = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.46, 1.0, 4), red);
-    taper.rotation.x = (end > 0 ? 1 : -1) * Math.PI / 2;
-    taper.rotation.y = Math.PI / 4;
-    taper.scale.set(1.32, 1, 0.78);
-    taper.position.set(0, 0.26, end * (HULL_LEN / 2 - 1.0) + end * 0.5);
-    canoe.add(taper);
-
-    // 反り上がる尖ったステム（側面プロファイルの押し出し）
-    const stemShape = new THREE.Shape();
-    stemShape.moveTo(0, 0.04);
-    stemShape.quadraticCurveTo(0.5, 0.1, 0.66, 0.68);  // 外側下から尖端へ反り上がる
-    stemShape.quadraticCurveTo(0.42, 0.56, 0, 0.5);    // 尖端からガンネルへ戻る
-    stemShape.closePath();
-    const stemGeometry = new THREE.ExtrudeGeometry(stemShape, {
-      depth: 0.07, bevelEnabled: true, bevelThickness: 0.012, bevelSize: 0.012, bevelSegments: 1,
-    });
-    stemGeometry.translate(0, 0, -0.035);
-    const stem = new THREE.Mesh(stemGeometry, red);
-    stem.rotation.y = end > 0 ? Math.PI / 2 : -Math.PI / 2; // プロファイルを長手方向へ
-    stem.position.set(0, 0, end * (HULL_LEN / 2 - 0.55));
-    canoe.add(stem);
-  }
-
-  // 黒いガンネル（上縁レール）
-  for (const sx of [-1, 1]) {
-    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.045, HULL_LEN - 0.9), gunwale);
-    rail.position.set(sx * 0.41, HULL_H + 0.02, 0);
-    canoe.add(rail);
-  }
-
-  // 木製シート×3（前・中・後）
-  for (const z of [1.25, 0.05, -1.3]) {
-    const seat = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.045, 0.2), wood);
-    seat.position.set(0, SEAT_Y, z);
-    canoe.add(seat);
-  }
-
-  // 側面の白い筆記体ロゴ（Old Town風）
-  const logoCv = document.createElement('canvas');
-  logoCv.width = 512; logoCv.height = 96;
-  const lx = logoCv.getContext('2d');
-  lx.font = 'italic bold 60px "Snell Roundhand", "Brush Script MT", cursive';
-  lx.fillStyle = '#f4f0e8';
-  lx.textBaseline = 'middle';
-  lx.textAlign = 'center';
-  lx.fillText('Old Town', 256, 48);
-  const logoTex = new THREE.CanvasTexture(logoCv);
-  logoTex.colorSpace = THREE.SRGBColorSpace;
-  for (const sx of [-1, 1]) {
-    const logo = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.9, 0.17),
-      new THREE.MeshBasicMaterial({ map: logoTex, transparent: true })
-    );
-    logo.position.set(sx * 0.42, 0.3, 0.55);
-    logo.rotation.y = sx * Math.PI / 2;
-    logo.rotation.z = sx * 0.14 * 0; // 側板の傾きに沿わせない（読みやすさ優先）
-    canoe.add(logo);
-  }
-
-  // 床に転がる黒い長靴（小ネタ）
-  const bootMat = new THREE.MeshStandardMaterial({ color: 0x101214, roughness: 0.4 });
-  for (const [bx, rot] of [[-0.1, 0.4], [0.13, -0.9]]) {
-    const boot = new THREE.Group();
-    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, 0.3, 10), bootMat);
-    shaft.position.y = 0.15;
-    boot.add(shaft);
-    const toe = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.09, 0.24), bootMat);
-    toe.position.set(0, 0.045, 0.1);
-    boot.add(toe);
-    boot.position.set(bx, 0.2, 0.65);
-    boot.rotation.set(Math.PI / 2.2, rot, 0); // ほぼ横倒し
-    canoe.add(boot);
-  }
-
-  canoe.traverse((c) => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
-  return canoe;
-}
 
 // ── 木のシングルブレードパドル（カヌー用） ──
 function createPaddle() {
@@ -302,12 +194,45 @@ function phaseWindow(p, a, b, w = 0.05) {
  * カヌー＋踊る少年＋漕ぐ大人2人を生成する。update(t) で駆動。
  */
 export function createDanceBoat(scene) {
-  const canoe = createCanoe();
+  const canoe = new THREE.Group();
   scene.add(canoe);
+
+  // Sketchfabの木製ボートを読み込み、実寸を測って正規化する
+  // （全長4.6m・長手をz軸・中心を原点・12cm沈めて喫水を作る）
+  let boyBaseY = SEAT_Y + 0.02; // モデル読込後に実際の縁の高さへ更新される
+  new GLTFLoader().load(
+    './assets/wooden-boat.glb',
+    (gltf) => {
+      const model = gltf.scene;
+      const box = new THREE.Box3().setFromObject(model);
+      const size = box.getSize(new THREE.Vector3());
+      const length = Math.max(size.x, size.z);
+      const scale = 4.6 / length;
+      model.scale.setScalar(scale);
+      if (size.x > size.z) model.rotation.y = Math.PI / 2; // 長手をz軸へ
+      const box2 = new THREE.Box3().setFromObject(model);
+      const center = box2.getCenter(new THREE.Vector3());
+      model.position.x -= center.x;
+      model.position.z -= center.z;
+      model.position.y -= box2.min.y + 0.14; // 喫水分沈める
+      model.traverse((c) => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
+      canoe.add(model);
+
+      // 縁の高さに合わせて乗員を再配置
+      const hullTop = box2.max.y - box2.min.y - 0.14;
+      boyBaseY = hullTop + 0.01;
+      boy.root.position.y = boyBaseY;
+      for (const entry of paddlers) {
+        entry.rig.paddler.position.y = hullTop - 0.18;
+      }
+    },
+    undefined,
+    (e) => console.warn('[maldives] boat model load failed:', e)
+  );
 
   const boy = createBoy();
   boy.root.scale.setScalar(0.75);              // 小さな少年
-  boy.root.position.set(0, SEAT_Y + 0.02, 1.25); // 前のシートの上に立つ
+  boy.root.position.set(0, SEAT_Y + 0.02, 1.45); // 舳先寄り（読込後に高さ調整）
   canoe.add(boy.root);
 
   // 少年の後ろで必死にカヌーを漕ぐ大人たち（2人、互いに逆舷）
@@ -378,7 +303,7 @@ export function createDanceBoat(scene) {
     // 膝のバウンス（Aで最も深く）
     const bounceDepth = 0.05 + 0.06 * wBounce;
     const bounce = Math.abs(Math.sin(beat)) * bounceDepth;
-    boy.root.position.y = SEAT_Y + 0.02 - bounce * 0.75;
+    boy.root.position.y = boyBaseY - bounce * 0.75;
     for (const leg of boy.legs) {
       leg.hip.rotation.x = bounce * 2.4;
       leg.knee.rotation.x = -bounce * 4.2;
