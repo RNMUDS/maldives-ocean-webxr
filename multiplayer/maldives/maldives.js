@@ -341,6 +341,9 @@ class MaldivesSpace extends SpaceCore {
       if (!this._localProxyOn) {
         this._localProxyOn = true;
         la.visible = true;
+        // ローカルアバタには名札が無い（リモートのみ付与される）ため、
+        // スクリーンに名前が映るようここで付ける
+        try { this.avatars.addNameLabel?.(la, this.userName); } catch {}
         la.traverse((o) => { if (o.layers) o.layers.set(1); });
         this._bcam.layers.enable(1);
       }
