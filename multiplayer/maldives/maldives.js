@@ -153,9 +153,10 @@ class MaldivesSpace extends SpaceCore {
       location.reload();
     });
 
-    // 全体配信（📢）: ONの間、自分の声が全員に距離減衰なしで届く
+    // 全体配信（📢）: ONの間、自分の声が全員に距離減衰なしで届く。
+    // ボタンは「中村先生」として入室した場合のみ表示する
     const bcBtn = document.getElementById('broadcast-btn');
-    bcBtn?.classList.remove('hidden');
+    if (this._isNakamuraName(this.userName)) bcBtn?.classList.remove('hidden');
     bcBtn?.addEventListener('click', () => {
       this._broadcasting = !this._broadcasting;
       try { this.socket?.socket?.emit('gw-broadcast-mode', { on: this._broadcasting }); } catch {}
