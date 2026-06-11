@@ -127,7 +127,9 @@ class MaldivesSpace extends SpaceCore {
     this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.3, 20000);
     this.camera.rotation.order = 'YXZ';
 
-    this.ocean = createOcean(this.scene);
+    this.ocean = createOcean(this.scene, {
+      swellEnabled: !!this.renderer.backend?.isWebGPUBackend,
+    });
     this.resort = createResort(this.scene);
     this.marine = createMarineLife(this.scene);
     this.danceBoat = createDanceBoat(this.scene);

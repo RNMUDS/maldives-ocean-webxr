@@ -1,6 +1,7 @@
 // WebGPU (three.js r179 / TSL) 版のラグーンの海と空。
 // シングルプレイ版の Water(WebGL) を WaterMesh / SkyMesh に置き換えたもの。
 import * as THREE from 'three';
+import { positionLocal, time, sin, cos, vec3 } from 'three/tsl';
 import { SkyMesh } from 'three/addons/objects/SkyMesh.js';
 import { WaterMesh } from 'three/addons/objects/WaterMesh.js';
 
@@ -20,11 +21,11 @@ const PRESET = {
   waterColor: 0x30e8da,
   sunElevation: 50,
   sunAzimuth: 235,
-  distortionScale: 1.6,
+  distortionScale: 2.6,
   fogDensity: 0.00002,
 };
 
-export function createOcean(scene) {
+export function createOcean(scene, { swellEnabled = true } = {}) {
   const sun = new THREE.Vector3();
   const phi = THREE.MathUtils.degToRad(90 - PRESET.sunElevation);
   const theta = THREE.MathUtils.degToRad(PRESET.sunAzimuth);
@@ -41,7 +42,7 @@ export function createOcean(scene) {
     (error) => console.error('水面法線テクスチャの読み込みに失敗:', error)
   );
   const water = new WaterMesh(
-    new THREE.PlaneGeometry(WATER_SIZE, WATER_SIZE),
+    new THREE.PlaneGeometry(WATER_SIZE, WATER_SIZE, 256, 256),
     {
       waterNormals,
       sunDirection: sun.clone().normalize(),
@@ -54,6 +55,15 @@ export function createOcean(scene) {
   water.rotation.x = -Math.PI / 2;
   water.material.transparent = true;
   water.renderOrder = 1;
+  // うねり: 3方向の正弦波で頂点を上下させる。
+  // WebGLバックエンドではWaterMeshのuniformブロック上限を超えて
+  // コンパイルに失敗するため、WebGPU時のみ適用する
+  if (swellEnabled) {
+    const swell = sin(positionLocal.x.mul(0.045).add(time.mul(0.6))).mul(0.14)
+      .add(cos(positionLocal.y.mul(0.032).add(time.mul(0.81))).mul(0.11))
+      .add(sin(positionLocal.x.add(positionLocal.y).mul(0.018).add(time.mul(0.42))).mul(0.16));
+    water.material.positionNode = positionLocal.add(vec3(0, 0, swell));
+  }
   scene.add(water);
 
   // ── 空（TSL SkyMesh） ──

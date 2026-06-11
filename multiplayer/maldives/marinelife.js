@@ -141,8 +141,16 @@ function createTropicalSchool() {
     metalness: 0.15,
     envMapIntensity: 0.8,
   });
-  const instanced = new THREE.InstancedMesh(geometry, material, TROPICAL_COUNT);
-  instanced.frustumCulled = false;
+  // モバイルWebGL2のUBO上限(16KB)に収まるよう200匹ごとに分割する
+  // （1バッチ200×mat4 64B ≒ 12.8KB < 16KB）
+  const BATCH = 200;
+  const batches = [];
+  for (let offset = 0; offset < TROPICAL_COUNT; offset += BATCH) {
+    const count = Math.min(BATCH, TROPICAL_COUNT - offset);
+    const instanced = new THREE.InstancedMesh(geometry, material, count);
+    instanced.frustumCulled = false;
+    batches.push(instanced);
+  }
 
   let seed = 5;
   const random = () => {
@@ -162,15 +170,17 @@ function createTropicalSchool() {
       bobPhase: random() * Math.PI * 2,
       scale: 0.6 + random() * 0.7,
       direction: i % 2 === 0 ? 1 : -1, // 群れ内で時計/反時計が混ざる
+      batch: batches[Math.floor(i / BATCH)],
+      slot: i % BATCH,
     });
     color.set(TROPICAL_PALETTE[i % TROPICAL_PALETTE.length]);
     // 個体ごとにわずかな色ムラ
     color.offsetHSL((random() - 0.5) * 0.04, 0, (random() - 0.5) * 0.1);
-    instanced.setColorAt(i, color);
+    members[i].batch.setColorAt(members[i].slot, color);
   }
-  instanced.instanceColor.needsUpdate = true;
+  for (const b of batches) b.instanceColor.needsUpdate = true;
 
-  return { instanced, members };
+  return { batches, members };
 }
 
 // 捕食者の魚（体長・色指定、背びれ付き）
@@ -361,7 +371,7 @@ export function createMarineLife(scene) {
 
   // カラフルな熱帯魚の大群
   const tropical = createTropicalSchool();
-  scene.add(tropical.instanced);
+  for (const batch of tropical.batches) scene.add(batch);
   const tropicalDummy = new THREE.Object3D();
 
   // --- 食物連鎖：中型魚（小魚を捕食）と大型魚（中型魚を捕食） ---
@@ -486,7 +496,7 @@ export function createMarineLife(scene) {
   const scatterVec = new THREE.Vector3();
 
   function updateTropical(time) {
-    const { instanced, members } = tropical;
+    const { batches, members } = tropical;
     const predatorPosition = chain.medium.mesh.position;
     const predatorHunting = chain.medium.mode !== 'dead';
     for (let i = 0; i < members.length; i += 1) {
@@ -521,9 +531,9 @@ export function createMarineLife(scene) {
       tropicalDummy.lookAt(posAhead); // 進行方向（揺らぎ込み）を向く
       tropicalDummy.scale.setScalar(m.scale);
       tropicalDummy.updateMatrix();
-      instanced.setMatrixAt(i, tropicalDummy.matrix);
+      m.batch.setMatrixAt(m.slot, tropicalDummy.matrix);
     }
-    instanced.instanceMatrix.needsUpdate = true;
+    for (const b of batches) b.instanceMatrix.needsUpdate = true;
   }
 
   // --- 食物連鎖のAI ---

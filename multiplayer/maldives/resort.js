@@ -141,8 +141,8 @@ const glowTexture = createGlowTexture();
 
 // 落水の縦筋テクスチャ（プールのオーバーフロー用）
 function createSpillTexture() {
-  const WIDTH = 256;
-  const HEIGHT = 512;
+  const WIDTH = 512;
+  const HEIGHT = 1024;
   const canvas = document.createElement('canvas');
   canvas.width = WIDTH;
   canvas.height = HEIGHT;
@@ -156,13 +156,13 @@ function createSpillTexture() {
 
   // 背景は透明のまま、はっきりした水筋を描く（隙間から奥が透けて
   // 「別々の筋が落ちている」ことが分かる）
-  const STREAK_COUNT = 46;
+  const STREAK_COUNT = 70;
   for (let i = 0; i < STREAK_COUNT; i += 1) {
     const x = random() * WIDTH;
-    const width = 2 + random() * 6;
+    const width = 4 + random() * 12;
     const alpha = 0.45 + random() * 0.45;
     // 筋に沿って濃淡の節を入れ、スクロール時に流速感を出す
-    const SEGMENTS = 8;
+    const SEGMENTS = 14;
     for (let s = 0; s < SEGMENTS; s += 1) {
       const y0 = (s / SEGMENTS) * HEIGHT;
       ctx.fillStyle = `rgba(255,255,255,${alpha * (0.45 + random() * 0.55)})`;
@@ -177,12 +177,14 @@ function createSpillTexture() {
   const texture = new THREE.CanvasTexture(canvas);
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
   return texture;
 }
 
 // 着水部の泡テクスチャ
 function createFoamTexture() {
-  const SIZE = 256;
+  const SIZE = 512;
   const canvas = document.createElement('canvas');
   canvas.width = SIZE;
   canvas.height = SIZE;
@@ -194,10 +196,10 @@ function createFoamTexture() {
     return seed / 2 ** 32;
   };
 
-  for (let i = 0; i < 90; i += 1) {
+  for (let i = 0; i < 140; i += 1) {
     const x = random() * SIZE;
     const y = random() * SIZE;
-    const r = 4 + random() * 14;
+    const r = 8 + random() * 28;
     const gradient = ctx.createRadialGradient(x, y, 0, x, y, r);
     gradient.addColorStop(0, `rgba(255,255,255,${0.25 + random() * 0.3})`);
     gradient.addColorStop(1, 'rgba(255,255,255,0)');
@@ -210,6 +212,8 @@ function createFoamTexture() {
   const texture = new THREE.CanvasTexture(canvas);
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
   return texture;
 }
 
