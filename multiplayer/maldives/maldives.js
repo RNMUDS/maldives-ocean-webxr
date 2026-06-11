@@ -75,11 +75,9 @@ class MaldivesSpace extends SpaceCore {
   }
 
   async start() {
-    if (!navigator.gpu) { gpuFail('このブラウザは WebGPU 非対応です。<br>Chrome / Edge 113+ で開いてください。'); return; }
-    setLoading('WebGPU を初期化中…');
+    setLoading('レンダラーを初期化中…');
     try { await this._setupRenderer(); }
-    catch (e) { gpuFail('WebGPU 初期化に失敗しました。<br><small>' + (e?.message ?? e) + '</small>'); return; }
-    if (!this.renderer.backend?.isWebGPUBackend) { gpuFail('WebGPU バックエンドが使えません。Chrome / Edge 113+ で開いてください。'); return; }
+    catch (e) { gpuFail('3D描画を初期化できませんでした。<br><small>' + (e?.message ?? e) + '</small>'); return; }
     setLoading('ラグーンとヴィラを建設中…');
     this._setupScene();
     this._setupControls();
@@ -93,6 +91,33 @@ class MaldivesSpace extends SpaceCore {
       .then(() => this._wireScreenShare())
       .catch((e) => console.warn('[maldives] voice:', e));
     hideLoading();
+  }
+
+  // WebGPUが使えれば使い、無ければ同じTSLシーンをWebGL2バックエンドで描く
+  // （/gw/ 本体と同じ方針 — スマホを含むほぼ全ブラウザで動く）
+  async _setupRenderer() {
+    this.canvas = document.getElementById('c');
+    let renderer = null;
+    if (navigator.gpu) {
+      try {
+        renderer = new THREE.WebGPURenderer({ canvas: this.canvas, antialias: true });
+        await renderer.init();
+      } catch (e) {
+        console.warn('[maldives] WebGPU init failed — falling back to WebGL2:', e?.message ?? e);
+        renderer = null;
+      }
+    }
+    if (!renderer) {
+      renderer = new THREE.WebGPURenderer({ canvas: this.canvas, antialias: true, forceWebGL: true });
+      await renderer.init();
+    }
+    this.renderer = renderer;
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = this.toneMappingExposure;
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   }
 
   // ── scene ──
