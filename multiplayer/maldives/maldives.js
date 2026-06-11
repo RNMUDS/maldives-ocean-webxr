@@ -22,6 +22,7 @@ import { createResort, DECK_HEIGHT, LAYOUT } from './resort.js';
 import { createMarineLife } from './marinelife.js';
 import { createClouds } from './clouds.js';
 import { loadGeneratedPBRSet } from './textures.js';
+import { createDanceBoat } from './dance-boat.js';
 
 const ROOM_ID = 'maldives-main';   // multiplayer room
 const SFU_ROOM = 'maldives';       // independent SFU voice/video room
@@ -129,6 +130,7 @@ class MaldivesSpace extends SpaceCore {
     this.ocean = createOcean(this.scene);
     this.resort = createResort(this.scene);
     this.marine = createMarineLife(this.scene);
+    this.danceBoat = createDanceBoat(this.scene);
     createClouds(this.scene);
     this._buildScreen();
 
@@ -364,6 +366,7 @@ class MaldivesSpace extends SpaceCore {
       this._step(dt, t);
       this.resort.update(t);
       this.marine.update(t);
+      this.danceBoat.update(t);
       try { await this.renderer.renderAsync(this.scene, this.camera); }
       catch (e) { if (!this._renderErrLogged) { this._renderErrLogged = true; console.warn('[maldives] render error:', e?.message ?? e); } }
     });
