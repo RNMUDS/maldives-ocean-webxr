@@ -111,21 +111,30 @@ class MaldivesSpace extends SpaceCore {
     raw.on('gw-broadcast-mode', (d) => {
       if (!d?.socketId) return;
       if (d.on) this.broadcastingSockets.add(d.socketId);
-      else this.broadcastingSockets.delete(d.socketId);
+      else {
+        this.broadcastingSockets.delete(d.socketId);
+        // 実際の位置に戻して通常の距離減衰へ復帰させる
+        const real = this.socket?.users?.get(d.socketId)?.position;
+        if (real) this.voice?.updateRemoteUserPosition?.(d.socketId, real);
+      }
     });
   }
 
-  // 空間音響の距離減衰を上書きして、配信中の声をフルボリュームにする。
-  // SpaceCoreが_syncTransform内で voice.updateSpatialAudio() を呼んだ直後に効かせる
+  // 配信中の話者を距離減衰の対象外にする。
+  // 後から音量を戻す方式だと基盤の空間音響(100ms周期)が行う
+  // consumer.pause→resumeの繰り返しで音がぷつぷつ途切れるため、
+  // 計算前に「配信者はすぐ隣にいる」ことにして減衰も停止も発生させない
   _syncTransform() {
-    super._syncTransform();
-    if (!this.voice || this.broadcastingSockets.size === 0) return;
-    for (const [producerId, entry] of this.voice.consumers ?? []) {
-      const socketId = this.voice.producerToSocket?.get(producerId);
-      if (!socketId || !this.broadcastingSockets.has(socketId)) continue;
-      if (entry.audioEl) entry.audioEl.volume = 1.0;
-      if (entry.consumer?.paused) { try { entry.consumer.resume(); } catch {} }
+    if (this.voice && this.broadcastingSockets.size > 0) {
+      for (const socketId of this.broadcastingSockets) {
+        this.voice.updateRemoteUserPosition?.(socketId, {
+          x: this.position.x,
+          y: this.position.y,
+          z: this.position.z,
+        });
+      }
     }
+    super._syncTransform();
   }
 
   // 時刻モード切替ボタン（昼 ⇄ 夕暮れ）。各自のクライアントだけに効く
