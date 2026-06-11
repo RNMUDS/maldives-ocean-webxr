@@ -142,6 +142,17 @@ class MaldivesSpace extends SpaceCore {
       });
     }
 
+    // 退出（🚪）: 後始末してから入口（名前入力画面）へ戻る
+    const exitBtn = document.getElementById('exit-btn');
+    exitBtn?.classList.remove('hidden');
+    exitBtn?.addEventListener('click', async () => {
+      if (!window.confirm('この空間から退出しますか？')) return;
+      try { if (this._localShare) await this._stopLocalShare(document.getElementById('screen-share-btn')); } catch {}
+      try { if (this._broadcasting) this.socket?.socket?.emit('gw-broadcast-mode', { on: false }); } catch {}
+      try { this.socket?.socket?.disconnect(); } catch {}
+      location.reload();
+    });
+
     // 全体配信（📢）: ONの間、自分の声が全員に距離減衰なしで届く
     const bcBtn = document.getElementById('broadcast-btn');
     bcBtn?.classList.remove('hidden');
