@@ -508,7 +508,7 @@ export function createMarineLife(scene) {
           tropicalDummy.position.set(0, -50, 0);
           tropicalDummy.scale.setScalar(0.001);
           tropicalDummy.updateMatrix();
-          instanced.setMatrixAt(i, tropicalDummy.matrix);
+          m.batch.setMatrixAt(m.slot, tropicalDummy.matrix);
           continue;
         }
       }

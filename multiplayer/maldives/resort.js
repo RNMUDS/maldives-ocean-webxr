@@ -612,7 +612,7 @@ function createInterior() {
  * 上段ウッドデッキ＋下段ベージュデッキ、角にインフィニティプール、
  * 白壁に大きなガラス開口、うすい茶色の茅葺き屋根、海への梯子。
  */
-function createVilla() {
+function createVilla({ glassFloor = false } = {}) {
   const villa = new THREE.Group();
   const frontZ = CABIN_D / 2; // キャビン前面(+z)
   const backZ = -CABIN_D / 2;
@@ -629,13 +629,28 @@ function createVilla() {
   villa.add(createStilt(-2.5, 0, DECK_HEIGHT));
   villa.add(createStilt(2.5, 0, DECK_HEIGHT));
 
-  // 上段デッキ
-  const deck = new THREE.Mesh(
-    new THREE.BoxGeometry(DECK_W, 0.14, DECK_D),
-    woodDeckMaterial
-  );
-  deck.position.y = DECK_HEIGHT - 0.07;
-  villa.add(deck);
+  // 上段デッキ（ガラス床ヴィラはキャビン中央 1.8x1.4 の開口を開けて4分割）
+  const HOLE_W = 1.8, HOLE_D = 1.4;
+  if (glassFloor) {
+    const deckParts = [
+      [DECK_W / 2 - HOLE_W / 2, DECK_D, -(HOLE_W / 2 + (DECK_W / 2 - HOLE_W / 2) / 2), 0],
+      [DECK_W / 2 - HOLE_W / 2, DECK_D, HOLE_W / 2 + (DECK_W / 2 - HOLE_W / 2) / 2, 0],
+      [HOLE_W, DECK_D / 2 - HOLE_D / 2, 0, -(HOLE_D / 2 + (DECK_D / 2 - HOLE_D / 2) / 2)],
+      [HOLE_W, DECK_D / 2 - HOLE_D / 2, 0, HOLE_D / 2 + (DECK_D / 2 - HOLE_D / 2) / 2],
+    ];
+    for (const [w, d, x, z] of deckParts) {
+      const part = new THREE.Mesh(new THREE.BoxGeometry(w, 0.14, d), woodDeckMaterial);
+      part.position.set(x, DECK_HEIGHT - 0.07, z);
+      villa.add(part);
+    }
+  } else {
+    const deck = new THREE.Mesh(
+      new THREE.BoxGeometry(DECK_W, 0.14, DECK_D),
+      woodDeckMaterial
+    );
+    deck.position.y = DECK_HEIGHT - 0.07;
+    villa.add(deck);
+  }
 
   // --- キャビン（白壁＋大開口ガラス） ---
   // 前面(+z): 中央にガラス引き戸（開口2.4m）
@@ -720,13 +735,47 @@ function createVilla() {
     villa.add(skirt);
   }
 
-  // キャビン床と内装
-  const cabinFloor = new THREE.Mesh(
-    new THREE.BoxGeometry(CABIN_W - 0.1, 0.06, CABIN_D - 0.1),
-    woodDeckMaterial
-  );
-  cabinFloor.position.set(0, DECK_HEIGHT + 0.04, 0);
-  villa.add(cabinFloor);
+  // キャビン床と内装（ガラス床ヴィラは中央に海が見えるガラス窓）
+  if (glassFloor) {
+    const fw = CABIN_W - 0.1, fd = CABIN_D - 0.1;
+    const floorParts = [
+      [fw / 2 - HOLE_W / 2, fd, -(HOLE_W / 2 + (fw / 2 - HOLE_W / 2) / 2), 0],
+      [fw / 2 - HOLE_W / 2, fd, HOLE_W / 2 + (fw / 2 - HOLE_W / 2) / 2, 0],
+      [HOLE_W, fd / 2 - HOLE_D / 2, 0, -(HOLE_D / 2 + (fd / 2 - HOLE_D / 2) / 2)],
+      [HOLE_W, fd / 2 - HOLE_D / 2, 0, HOLE_D / 2 + (fd / 2 - HOLE_D / 2) / 2],
+    ];
+    for (const [w, d, x, z] of floorParts) {
+      const part = new THREE.Mesh(new THREE.BoxGeometry(w, 0.06, d), woodDeckMaterial);
+      part.position.set(x, DECK_HEIGHT + 0.04, z);
+      villa.add(part);
+    }
+    // 床のガラス（下の海・魚が見える）
+    const glassPane = new THREE.Mesh(
+      new THREE.PlaneGeometry(HOLE_W - 0.06, HOLE_D - 0.06),
+      glassMaterial
+    );
+    glassPane.rotation.x = -Math.PI / 2;
+    glassPane.position.set(0, DECK_HEIGHT + 0.05, 0);
+    villa.add(glassPane);
+    // ガラスの縁の枠
+    for (const [w, d, x, z] of [
+      [HOLE_W + 0.16, 0.08, 0, HOLE_D / 2 + 0.04],
+      [HOLE_W + 0.16, 0.08, 0, -(HOLE_D / 2 + 0.04)],
+      [0.08, HOLE_D, HOLE_W / 2 + 0.04, 0],
+      [0.08, HOLE_D, -(HOLE_W / 2 + 0.04), 0],
+    ]) {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(w, 0.05, d), woodPostMaterial);
+      rail.position.set(x, DECK_HEIGHT + 0.075, z);
+      villa.add(rail);
+    }
+  } else {
+    const cabinFloor = new THREE.Mesh(
+      new THREE.BoxGeometry(CABIN_W - 0.1, 0.06, CABIN_D - 0.1),
+      woodDeckMaterial
+    );
+    cabinFloor.position.set(0, DECK_HEIGHT + 0.04, 0);
+    villa.add(cabinFloor);
+  }
   const interior = createInterior();
   interior.position.y = DECK_HEIGHT + 0.07;
   villa.add(interior);
@@ -987,7 +1036,7 @@ export function createResort(scene) {
     scene.add(branch);
 
     // 入口(+z)が桟橋(-x方向)を向くよう -90° 回転
-    const villa = createVilla();
+    const villa = createVilla({ glassFloor: i === 0 });
     villa.rotation.y = -Math.PI / 2;
     villa.position.set(VILLA_CENTER_X, 0, z);
     scene.add(villa);
