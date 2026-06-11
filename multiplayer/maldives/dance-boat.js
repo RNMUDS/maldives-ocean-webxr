@@ -18,9 +18,7 @@ const BOAT_SPEED = 0.04;
 const BEAT_HZ = 2.2;            // 約132BPM
 const DANCE_PERIOD = 10.9;      // フェーズ一巡の長さ(s) ≒ 24拍
 
-const HULL_LEN = 4.6;
-const HULL_H = 0.5;             // ガンネル（縁）の高さ
-const SEAT_Y = 0.34;            // シート上面
+const SEAT_Y = 0.34; // 乗員の暫定座面高（モデル読込後に実寸へ更新）
 
 // ── 木のシングルブレードパドル（カヌー用） ──
 function createPaddle() {

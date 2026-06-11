@@ -259,6 +259,24 @@ class MaldivesSpace extends SpaceCore {
       try { entry.texture.dispose(); } catch {}
       if (this._activeShareId === producerId) this._activateNextShare();
     });
+
+    // 途中入室対応: 入室前から共有中だった画面は voice.initialize() 中に
+    // 消費され、videoProducerAdded をリスナー登録前に発火し終えている。
+    // videoConsumers に残っているので、ここで取り込んでスクリーンに出す
+    if (this.voice.videoConsumers) {
+      for (const [producerId, entry] of this.voice.videoConsumers) {
+        if (this.voice.screenProducer?.id === producerId) continue;
+        if (this._shares.has(producerId)) continue;
+        const texture = this._makeVideoTexture(entry.videoEl);
+        this._shares.set(producerId, {
+          texture,
+          videoEl: entry.videoEl,
+          socketId: entry.socketId,
+          userName: this._shareName(entry.socketId),
+        });
+        if (!this._activeShareId) this._activateShare(producerId);
+      }
+    }
   }
 
   _makeVideoTexture(videoEl) {

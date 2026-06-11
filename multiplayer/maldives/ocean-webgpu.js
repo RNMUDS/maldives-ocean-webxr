@@ -42,7 +42,7 @@ export function createOcean(scene, { swellEnabled = true } = {}) {
     (error) => console.error('水面法線テクスチャの読み込みに失敗:', error)
   );
   const water = new WaterMesh(
-    new THREE.PlaneGeometry(WATER_SIZE, WATER_SIZE, 256, 256),
+    new THREE.PlaneGeometry(WATER_SIZE, WATER_SIZE, 128, 128),
     {
       waterNormals,
       sunDirection: sun.clone().normalize(),

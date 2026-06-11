@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { loadTexture, loadGeneratedPBRSet } from './textures.js';
 
 export const DECK_HEIGHT = 1.2; // 水面から上段デッキ上面まで(m)
@@ -110,9 +111,31 @@ const cushionMaterial = new THREE.MeshStandardMaterial({
   envMapIntensity: 0.4,
 });
 
+// ── ドローコール削減: 静的な同材質ジオメトリを1メッシュに結合する ──
+function mergeStatic(geometries, material) {
+  const merged = mergeGeometries(geometries);
+  for (const g of geometries) g.dispose();
+  const mesh = new THREE.Mesh(merged, material);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return mesh;
+}
+function boxGeo(w, h, d, x, y, z) {
+  const g = new THREE.BoxGeometry(w, h, d);
+  g.translate(x, y, z);
+  return g;
+}
+function stiltGeo(x, z, deckTopY) {
+  const DEPTH_BELOW_WATER = 3.2;
+  const topY = deckTopY - 0.06;
+  const g = new THREE.CylinderGeometry(0.12, 0.14, topY + DEPTH_BELOW_WATER, 10);
+  g.translate(x, (topY - DEPTH_BELOW_WATER) / 2, z);
+  return g;
+}
+
 function enableShadows(object) {
   object.traverse((child) => {
-    if (child.isMesh) {
+    if (child.isMesh && !child.userData.noShadow) {
       child.castShadow = true;
       child.receiveShadow = true;
     }
@@ -288,6 +311,8 @@ function createRailing(width, depth, gaps = []) {
   const railing = new THREE.Group();
   const RAIL_HEIGHT = 0.95;
   const POST_GAP = 1.2;
+  const postGeos = [];
+  const railGeos = [];
 
   const sides = [
     { name: 'south', axis: 'x', fixed: depth / 2, length: width },
@@ -315,25 +340,22 @@ function createRailing(width, depth, gaps = []) {
       const count = Math.max(1, Math.floor(segmentLength / POST_GAP));
       for (let i = 0; i <= count; i += 1) {
         const t = from + (i * segmentLength) / count;
-        const post = new THREE.Mesh(
-          new THREE.BoxGeometry(0.07, RAIL_HEIGHT, 0.07),
-          woodPostMaterial
+        postGeos.push(
+          side.axis === 'x'
+            ? boxGeo(0.07, RAIL_HEIGHT, 0.07, t, RAIL_HEIGHT / 2, side.fixed)
+            : boxGeo(0.07, RAIL_HEIGHT, 0.07, side.fixed, RAIL_HEIGHT / 2, t)
         );
-        if (side.axis === 'x') post.position.set(t, RAIL_HEIGHT / 2, side.fixed);
-        else post.position.set(side.fixed, RAIL_HEIGHT / 2, t);
-        railing.add(post);
       }
-      const rail = new THREE.Mesh(
+      railGeos.push(
         side.axis === 'x'
-          ? new THREE.BoxGeometry(segmentLength, 0.08, 0.1)
-          : new THREE.BoxGeometry(0.1, 0.08, segmentLength),
-        woodDeckMaterial
+          ? boxGeo(segmentLength, 0.08, 0.1, center, RAIL_HEIGHT, side.fixed)
+          : boxGeo(0.1, 0.08, segmentLength, side.fixed, RAIL_HEIGHT, center)
       );
-      if (side.axis === 'x') rail.position.set(center, RAIL_HEIGHT, side.fixed);
-      else rail.position.set(side.fixed, RAIL_HEIGHT, center);
-      railing.add(rail);
     }
   }
+  // 支柱・レールをそれぞれ1メッシュに結合（柵1枚=2ドローコール）
+  railing.add(mergeStatic(postGeos, woodPostMaterial));
+  railing.add(mergeStatic(railGeos, woodDeckMaterial));
   return railing;
 }
 
@@ -347,6 +369,7 @@ function createGlassPanel(width, height) {
     glassMaterial
   );
   glass.position.y = height / 2;
+  glass.userData.noShadow = true; // 透明ガラスは影を落とさない
   panel.add(glass);
 
   for (const [w, h, x, y] of [
@@ -416,14 +439,14 @@ function createPrivacyWall(length, height) {
   const wall = new THREE.Group();
   const SLAT_PITCH = 0.18;
   const count = Math.floor(length / SLAT_PITCH);
+  const slatGeos = [];
   for (let i = 0; i < count; i += 1) {
-    const slat = new THREE.Mesh(
-      new THREE.BoxGeometry(0.1, height, SLAT_PITCH - 0.05),
-      woodPostMaterial
-    );
-    slat.position.set(0, height / 2, -length / 2 + (i + 0.5) * SLAT_PITCH);
-    wall.add(slat);
+    slatGeos.push(boxGeo(
+      0.1, height, SLAT_PITCH - 0.05,
+      0, height / 2, -length / 2 + (i + 0.5) * SLAT_PITCH
+    ));
   }
+  wall.add(mergeStatic(slatGeos, woodPostMaterial));
   return wall;
 }
 
@@ -483,6 +506,7 @@ function createPool(poolW, poolD) {
     })
   );
   shade.position.set(0, WATER_LEVEL - dropHeight / 2, -poolD / 2 + 0.005);
+  shade.userData.noShadow = true;
   pool.add(shade);
 
   // 奥層：薄い色で広く、わずかに外へ傾ける
@@ -492,6 +516,7 @@ function createPool(poolW, poolD) {
   );
   backSheet.position.set(0, WATER_LEVEL - dropHeight / 2, -poolD / 2 - 0.02);
   backSheet.rotation.x = 0.04;
+  backSheet.userData.noShadow = true;
   pool.add(backSheet);
 
   // 手前層：はっきりした水筋（速いスクロール）
@@ -501,6 +526,7 @@ function createPool(poolW, poolD) {
   );
   frontSheet.position.set(0, WATER_LEVEL - dropHeight / 2 - 0.02, -poolD / 2 - 0.07);
   frontSheet.rotation.x = 0.07; // 下端ほど外へ膨らむ放物線の近似
+  frontSheet.userData.noShadow = true;
   pool.add(frontSheet);
 
   // 低い外縁を越えてカーブする水（白く輝く越流エッジ）
@@ -519,6 +545,7 @@ function createPool(poolW, poolD) {
   );
   foam.rotation.x = -Math.PI / 2;
   foam.position.set(0, -LOWER_DECK_TOP + 0.06, -poolD / 2 - 0.55);
+  foam.userData.noShadow = true;
   pool.add(foam);
 
   // --- 落下する水滴パーティクル ---
@@ -618,16 +645,18 @@ function createVilla({ glassFloor = false } = {}) {
   const backZ = -CABIN_D / 2;
   const cabinBaseY = DECK_HEIGHT;
 
-  // 杭（上段デッキ）
+  // 杭（上段デッキ、6本を1メッシュに結合）
+  const villaStiltGeos = [];
   for (const sx of [-1, 1]) {
     for (const sz of [-1, 1]) {
-      villa.add(
-        createStilt(sx * (DECK_W / 2 - 0.5), sz * (DECK_D / 2 - 0.5), DECK_HEIGHT)
+      villaStiltGeos.push(
+        stiltGeo(sx * (DECK_W / 2 - 0.5), sz * (DECK_D / 2 - 0.5), DECK_HEIGHT)
       );
     }
   }
-  villa.add(createStilt(-2.5, 0, DECK_HEIGHT));
-  villa.add(createStilt(2.5, 0, DECK_HEIGHT));
+  villaStiltGeos.push(stiltGeo(-2.5, 0, DECK_HEIGHT));
+  villaStiltGeos.push(stiltGeo(2.5, 0, DECK_HEIGHT));
+  villa.add(mergeStatic(villaStiltGeos, woodPostMaterial));
 
   // 上段デッキ（ガラス床ヴィラはキャビン中央 1.8x1.4 の開口を開けて4分割）
   const HOLE_W = 1.8, HOLE_D = 1.4;
@@ -804,14 +833,16 @@ function createVilla({ glassFloor = false } = {}) {
   );
   lowerDeck.position.set(lowerCenterX, LOWER_DECK_TOP - 0.07, lowerCenterZ);
   villa.add(lowerDeck);
+  const lowerStiltGeos = [];
   for (const [sx, sz] of [
     [lowerCenterX - LOWER_W / 2 + 0.4, lowerCenterZ - LOWER_D / 2 + 0.4],
     [lowerCenterX + LOWER_W / 2 - 0.4, lowerCenterZ - LOWER_D / 2 + 0.4],
     [lowerCenterX - LOWER_W / 2 + 0.4, lowerCenterZ + LOWER_D / 2 - 0.4],
     [lowerCenterX + LOWER_W / 2 - 0.4, lowerCenterZ + LOWER_D / 2 - 0.4],
   ]) {
-    villa.add(createStilt(sx, sz, LOWER_DECK_TOP));
+    lowerStiltGeos.push(stiltGeo(sx, sz, LOWER_DECK_TOP));
   }
+  villa.add(mergeStatic(lowerStiltGeos, woodPostMaterial));
 
   // 上段→下段への階段
   const STEP_COUNT = 3;
@@ -877,26 +908,29 @@ function createVilla({ glassFloor = false } = {}) {
 // 桟橋の板張り通路（杭付き）。長さ方向は z。
 function createWalkway(length, width) {
   const walkway = new THREE.Group();
+  // 板は1枚ずつ別メッシュにせず、全板を1ジオメトリに結合（1ドローコール）
   const PLANK_PITCH = 0.36;
   const plankCount = Math.floor(length / PLANK_PITCH);
+  const plankGeos = [];
   for (let i = 0; i < plankCount; i += 1) {
-    const plank = new THREE.Mesh(
-      new THREE.BoxGeometry(width, 0.08, PLANK_PITCH - 0.05),
-      woodDeckMaterial
-    );
-    plank.position.set(0, DECK_HEIGHT - 0.04, -length / 2 + (i + 0.5) * PLANK_PITCH);
-    walkway.add(plank);
+    plankGeos.push(boxGeo(
+      width, 0.08, PLANK_PITCH - 0.05,
+      0, DECK_HEIGHT - 0.04, -length / 2 + (i + 0.5) * PLANK_PITCH
+    ));
   }
+  walkway.add(mergeStatic(plankGeos, woodDeckMaterial));
+  // 杭も全て結合
   const POST_PITCH = 4;
+  const stiltGeos = [];
   for (let z = -length / 2; z <= length / 2; z += POST_PITCH) {
-    walkway.add(createStilt(-width / 2 + 0.15, z, DECK_HEIGHT));
-    walkway.add(createStilt(width / 2 - 0.15, z, DECK_HEIGHT));
+    stiltGeos.push(stiltGeo(-width / 2 + 0.15, z, DECK_HEIGHT));
+    stiltGeos.push(stiltGeo(width / 2 - 0.15, z, DECK_HEIGHT));
   }
-  enableShadows(walkway);
+  walkway.add(mergeStatic(stiltGeos, woodPostMaterial));
   return walkway;
 }
 
-function createLampPost() {
+function createLampPost({ withLight = true } = {}) {
   const lampPost = new THREE.Group();
   const POST_HEIGHT = 1.3;
 
@@ -926,9 +960,14 @@ function createLampPost() {
   lantern.position.y = POST_HEIGHT + 0.1;
   lampPost.add(lantern);
 
-  const light = new THREE.PointLight(LAMP_COLOR, LAMP_INTENSITY, LAMP_RANGE, 2);
-  light.position.y = POST_HEIGHT + 0.1;
-  lampPost.add(light);
+  // WebGLのフォワード描画では灯数がそのまま全物体の負荷になるため、
+  // 実光源は一部のランプのみ（見た目の発光・光暈は全ランプ共通）
+  let light = null;
+  if (withLight) {
+    light = new THREE.PointLight(LAMP_COLOR, LAMP_INTENSITY, LAMP_RANGE, 2);
+    light.position.y = POST_HEIGHT + 0.1;
+    lampPost.add(light);
+  }
 
   const halo = new THREE.Sprite(
     new THREE.SpriteMaterial({
@@ -1114,7 +1153,7 @@ export function createResort(scene) {
 
   const lampCount = Math.floor(JETTY_LENGTH / LAMP_SPACING);
   for (let i = 0; i <= lampCount; i += 1) {
-    const lampPost = createLampPost();
+    const lampPost = createLampPost({ withLight: i % 3 === 0 });
     const side = i % 2 === 0 ? 1 : -1;
     lampPost.position.set(
       side * (JETTY_WIDTH / 2 - 0.18),
@@ -1136,7 +1175,9 @@ export function createResort(scene) {
   function update(time) {
     for (let i = 0; i < lampPosts.length; i += 1) {
       const flicker = 0.88 + 0.12 * Math.sin(time * 4.5 + i * 1.7);
-      lampPosts[i].userData.light.intensity = LAMP_INTENSITY * flicker;
+      if (lampPosts[i].userData.light) {
+        lampPosts[i].userData.light.intensity = LAMP_INTENSITY * flicker;
+      }
       lampPosts[i].userData.halo.material.opacity = flicker;
     }
     // プールの落水：2層の水筋を異なる速度で流し、着水の泡を脈動させる
