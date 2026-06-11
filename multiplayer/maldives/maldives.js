@@ -151,7 +151,7 @@ class MaldivesSpace extends SpaceCore {
     sound.setRefDistance(7);
     sound.setRolloffFactor(1.5);
     sound.setLoop(true);
-    sound.setVolume(0.9);
+    sound.setVolume(0.11); // 元の0.9から 1/2 → さらに1/4 に減音
     this.danceBoat.boat.add(sound);
 
     new THREE.AudioLoader().load(
