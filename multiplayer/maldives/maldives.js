@@ -200,6 +200,7 @@ class MaldivesSpace extends SpaceCore {
     this.danceBoat = createDanceBoat(this.scene);
     createClouds(this.scene);
     this._buildScreen();
+    this._setupBroadcastCam();
     this._setupBoatAudio();
 
     window.addEventListener('resize', () => {
@@ -301,6 +302,100 @@ class MaldivesSpace extends SpaceCore {
     this.scene.add(group);
   }
 
+  // ── 放送カメラ: 共有が無い間、「中村先生」アバタを自動追尾して
+  //    全身をスクリーンに大写しにする（/internship/の方式を移植）。
+  //    フィールドが広いので、先生の正面3.5mに浮かぶドローンカメラ方式 ──
+  _setupBroadcastCam() {
+    this._bcam = new THREE.PerspectiveCamera(32, 16 / 9, 0.3, 800);
+    this._bcamRT = new THREE.RenderTarget(960, 540);
+    // WebGPUのレンダーターゲットはV反転するためUVで戻す
+    this._bcamRT.texture.wrapS = THREE.ClampToEdgeWrapping;
+    this._bcamRT.texture.wrapT = THREE.ClampToEdgeWrapping;
+    this._bcamRT.texture.repeat.set(1, -1);
+    this._bcamRT.texture.offset.set(0, 1);
+    this._bcamMat = new THREE.MeshBasicMaterial({ map: this._bcamRT.texture, toneMapped: false });
+    this._bcamPos = new THREE.Vector3(0, 3, 20);
+    this._bcamLook = new THREE.Vector3(0, 1.5, 0);
+    this._bcamAim = new THREE.Vector3();
+    this._bcamOn = false;
+  }
+
+  _isNakamuraName(s) {
+    const n = (s || '').replace(/\s+/g, '');
+    return n.includes('中村先生') || n === '中村';
+  }
+
+  // 中村先生アバタの位置と向きを探す。本人がローカルの場合は
+  // 通常非表示のローカルアバタをレイヤー1で放送カメラ専用に映す
+  _findNakamuraPose() {
+    const map = this.avatars?.avatars;
+    if (map) {
+      for (const av of map.values()) {
+        if (this._isNakamuraName(av?.userData?.userName)) {
+          return { pos: av.position, yaw: av.rotation?.y ?? 0 };
+        }
+      }
+    }
+    if (this._isNakamuraName(this.userName) && this.avatars?.localAvatar) {
+      const la = this.avatars.localAvatar;
+      if (!this._localProxyOn) {
+        this._localProxyOn = true;
+        la.visible = true;
+        la.traverse((o) => { if (o.layers) o.layers.set(1); });
+        this._bcam.layers.enable(1);
+      }
+      la.position.set(this.position.x, this.position.y - 1, this.position.z);
+      la.rotation.y = this.yaw;
+      return { pos: la.position, yaw: this.yaw };
+    }
+    return null;
+  }
+
+  async _updateBroadcast() {
+    if (!this._bcamRT) return;
+    const pose = this._activeShareId ? null : this._findNakamuraPose();
+    const want = !!pose;
+    if (want !== this._bcamOn) { this._bcamOn = want; this._applyDefaultContent(); }
+    if (!want) return;
+    try {
+      // 先生の正面3.5m・少し上から全身を狙う（イーズ追従）
+      const facingX = -Math.sin(pose.yaw);
+      const facingZ = -Math.cos(pose.yaw);
+      const desired = this._bcamAim.set(
+        pose.pos.x + facingX * 3.5,
+        pose.pos.y + 0.6,
+        pose.pos.z + facingZ * 3.5
+      );
+      this._bcamPos.lerp(desired, 0.06);
+      this._bcam.position.copy(this._bcamPos);
+      this._bcamAim.set(pose.pos.x, pose.pos.y + 0.1, pose.pos.z);
+      this._bcamLook.lerp(this._bcamAim, 0.1);
+      this._bcam.lookAt(this._bcamLook);
+      // スクリーンが自分自身を映さないよう描画中は隠す
+      for (const m of this._screenMeshes) m.visible = false;
+      this.renderer.setRenderTarget(this._bcamRT);
+      await this.renderer.renderAsync(this.scene, this._bcam);
+      this.renderer.setRenderTarget(null);
+      for (const m of this._screenMeshes) m.visible = true;
+    } catch (e) {
+      // 失敗したらカメラ機能を畳み、案内画面に戻す（fail-open）
+      if (!this._bcamErrLogged) { this._bcamErrLogged = true; console.warn('[maldives] bcam render failed:', e?.message ?? e); }
+      try { this.renderer.setRenderTarget(null); } catch {}
+      for (const m of this._screenMeshes) m.visible = true;
+      this._bcamRT = null;
+      this._bcamOn = false;
+      this._applyDefaultContent();
+    }
+  }
+
+  // 共有なしの時の既定表示: 中村先生カメラ → 不在なら案内画面
+  _applyDefaultContent() {
+    if (this._activeShareId) return;
+    const mat = (this._bcamOn && this._bcamMat) ? this._bcamMat : this._placeholderMat;
+    for (const m of this._screenMeshes) { m.material = mat; m.scale.set(1, 1, 1); }
+    this._setShareLabel(this._bcamOn ? '📹 中村先生を追尾中' : null);
+  }
+
   // ── screen share (SFU video, /internship/ と同じスタック) ──
   _wireScreenShare() {
     const btn = document.getElementById('screen-share-btn');
@@ -382,8 +477,7 @@ class MaldivesSpace extends SpaceCore {
     this._activeShareId = null;
     this._videoEl = null;
     this._videoMat.map = null;
-    for (const m of this._screenMeshes) { m.material = this._placeholderMat; m.scale.set(1, 1, 1); }
-    this._setShareLabel(null);
+    this._applyDefaultContent();
   }
 
   // レターボックス（contain）フィット：共有映像のアスペクト比を保つ
@@ -510,6 +604,7 @@ class MaldivesSpace extends SpaceCore {
       this.resort.update(t);
       this.marine.update(t);
       this.danceBoat.update(t);
+      await this._updateBroadcast();
       try { await this.renderer.renderAsync(this.scene, this.camera); }
       catch (e) { if (!this._renderErrLogged) { this._renderErrLogged = true; console.warn('[maldives] render error:', e?.message ?? e); } }
     });
