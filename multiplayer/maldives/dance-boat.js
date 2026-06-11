@@ -56,14 +56,14 @@ function createKayak() {
   // 低く平たい船体（タンデム、全長約4.5m）
   // 参照画像: 側面下部は白っぽいマーブル、デッキ側は黒グレー迷彩
   const lightHull = new THREE.MeshStandardMaterial({ color: 0xe8ecef, roughness: 0.45 });
-  const hull = new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.18, 3.2), lightHull);
+  const hull = new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.18, 4.8), lightHull);
   hull.position.y = 0.09;
   kayak.add(hull);
-  const deckSlab = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.08, 3.2), camo);
+  const deckSlab = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.08, 4.8), camo);
   deckSlab.position.y = 0.22;
   kayak.add(deckSlab);
   // 先細りの舳先・船尾（潰した四角錐）
-  for (const [z, len] of [[1.6, 1.1], [-1.6, 0.75]]) {
+  for (const [z, len] of [[2.4, 1.2], [-2.4, 0.8]]) {
     const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.6, len, 4), camo);
     tip.rotation.x = (z > 0 ? -1 : 1) * Math.PI / 2;
     tip.rotation.y = Math.PI / 4;
@@ -72,11 +72,11 @@ function createKayak() {
     kayak.add(tip);
   }
   // 甲板の縁の盛り上がり
-  const rim = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.05, 3.1), camo);
+  const rim = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.05, 4.7), camo);
   rim.position.y = 0.28;
   kayak.add(rim);
   // 座席のくぼみ（2席、濃色のインセット）と背もたれ
-  for (const z of [-1.15, -0.05]) {
+  for (const z of [-1.7, -0.5]) {
     const well = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.05, 0.72), dark);
     well.position.set(0, 0.285, z);
     kayak.add(well);
@@ -87,11 +87,11 @@ function createKayak() {
 
   // 前方デッキの黒い丸ハッチ（参照画像のアクセント）
   const hatch = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.04, 20), dark);
-  hatch.position.set(0, 0.30, 0.95);
+  hatch.position.set(0, 0.30, 1.45);
   kayak.add(hatch);
   // 舳先の黒いハンドル
   const handle = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.05, 0.3), dark);
-  handle.position.set(0, 0.24, 2.45);
+  handle.position.set(0, 0.24, 2.7);
   kayak.add(handle);
   // 船体側面の「STREAM JOURNEY」ロゴ
   const logoCv = document.createElement('canvas');
@@ -105,10 +105,10 @@ function createKayak() {
   logoTex.colorSpace = THREE.SRGBColorSpace;
   for (const sx of [-1, 1]) {
     const logo = new THREE.Mesh(
-      new THREE.PlaneGeometry(1.5, 0.14),
+      new THREE.PlaneGeometry(2.2, 0.16),
       new THREE.MeshBasicMaterial({ map: logoTex, transparent: true })
     );
-    logo.position.set(sx * 0.435, 0.09, 0.4);
+    logo.position.set(sx * 0.435, 0.09, 0.2);
     logo.rotation.y = sx * Math.PI / 2;
     kayak.add(logo);
   }
@@ -123,7 +123,7 @@ function createKayak() {
     const toe = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.09, 0.24), bootMat);
     toe.position.set(0, 0.045, 0.1);
     boot.add(toe);
-    boot.position.set(bx, 0.27, 0.22);
+    boot.position.set(bx, 0.27, 0.6);
     boot.rotation.set(Math.PI / 2.2, rot, 0); // ほぼ横倒し
     kayak.add(boot);
   }
@@ -313,15 +313,17 @@ export function createDanceBoat(scene) {
   scene.add(kayak);
 
   const boy = createBoy();
-  boy.root.position.set(0, 0.31, 0.75); // 前席の前、舳先寄りのデッキ
+  boy.root.scale.setScalar(0.75);       // 小さな少年
+  boy.root.position.set(0, 0.31, 2.0);  // 舳先のデッキ
   kayak.add(boy.root);
 
   // 男の子の後ろで必死にカヌーを漕ぐ大人たち（2人）
   const paddlers = [
-    { rig: createPaddler({ hairColor: 0x2a2018, topColor: 0x37424a }), z: -0.05, phase: 0 },
-    { rig: createPaddler({ hairColor: 0xc9a96a, topColor: 0x2c3438 }), z: -1.15, phase: Math.PI }, // 逆位相で漕ぐ
+    { rig: createPaddler({ hairColor: 0x2a2018, topColor: 0x37424a }), z: -0.5, phase: 0 },
+    { rig: createPaddler({ hairColor: 0xc9a96a, topColor: 0x2c3438 }), z: -1.7, phase: Math.PI }, // 逆位相で漕ぐ
   ];
   for (const entry of paddlers) {
+    entry.rig.paddler.scale.setScalar(1.25); // 大人の体格
     entry.rig.paddler.position.set(0, 0.28, entry.z);
     kayak.add(entry.rig.paddler);
   }
@@ -384,7 +386,7 @@ export function createDanceBoat(scene) {
     // 膝のバウンス（ダンス全体を通して、Aで最も深く）
     const bounceDepth = 0.05 + 0.06 * wBounce;
     const bounce = Math.abs(Math.sin(beat)) * bounceDepth;
-    boy.root.position.y = 0.31 - bounce;
+    boy.root.position.y = 0.31 - bounce * 0.75;
     for (const leg of boy.legs) {
       leg.hip.rotation.x = bounce * 2.4;     // 股関節を曲げ
       leg.knee.rotation.x = -bounce * 4.2;   // 膝で吸収（しゃがみ込み）
