@@ -1,0 +1,54 @@
+html,
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #000;
+  font-family: "Hiragino Kaku Gothic ProN", "Helvetica Neue", Arial, sans-serif;
+}
+
+#overlay {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 10;
+  color: #fff;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+
+#overlay h1 {
+  margin: 0 0 4px;
+  font-size: 18px;
+  letter-spacing: 0.08em;
+}
+
+#overlay p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  opacity: 0.85;
+}
+
+#shareButton {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 20;
+  padding: 10px 16px;
+  font-size: 14px;
+  color: #fff;
+  background: rgba(11, 38, 64, 0.8);
+  border: 1px solid #2fd0c8;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+#shareButton:hover {
+  background: rgba(47, 208, 200, 0.35);
+}
+
+#shareButton.sharing {
+  background: rgba(208, 60, 60, 0.7);
+  border-color: #ff8888;
+}

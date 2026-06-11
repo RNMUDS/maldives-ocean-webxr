@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <title>Ocean WebXR — Three.js Water</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%2317c6b8'/%3E%3C/svg%3E" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="overlay">
+    <h1>Ocean WebXR</h1>
+    <p>クリック: 視点操作開始（マウスで見回し / ESCで解除）<br />WASD・矢印: 移動 / Shift: 高速移動 / Space: 飛行<br />VRヘッドセットでは「ENTER VR」をタップ</p>
+  </div>
+  <script type="module" src="js/main.js?v=2"></script>
+</body>
+</html>
