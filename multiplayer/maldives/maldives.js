@@ -96,6 +96,20 @@ class MaldivesSpace extends SpaceCore {
     hideLoading();
   }
 
+  // 時刻モード切替ボタン（昼 ⇄ 夕暮れ）。各自のクライアントだけに効く
+  _wireExtraUI() {
+    const btn = document.getElementById('time-btn');
+    if (!btn) return;
+    btn.classList.remove('hidden');
+    this._timeMode = 'noon';
+    btn.addEventListener('click', () => {
+      this._timeMode = this._timeMode === 'noon' ? 'sunset' : 'noon';
+      this.ocean.setMode(this._timeMode);
+      btn.textContent = this._timeMode === 'noon' ? '🌅' : '☀️';
+      btn.title = this._timeMode === 'noon' ? '夕暮れにする' : '昼にする';
+    });
+  }
+
   // WebGPUが使えれば使い、無ければ同じTSLシーンをWebGL2バックエンドで描く
   // （/gw/ 本体と同じ方針 — スマホを含むほぼ全ブラウザで動く）
   async _setupRenderer() {
@@ -136,6 +150,7 @@ class MaldivesSpace extends SpaceCore {
 
     this.ocean = createOcean(this.scene, {
       swellEnabled: !!this.renderer.backend?.isWebGPUBackend,
+      renderer: this.renderer,
     });
     this.resort = createResort(this.scene);
     this.marine = createMarineLife(this.scene);

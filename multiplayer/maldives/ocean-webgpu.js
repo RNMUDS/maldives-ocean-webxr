@@ -13,19 +13,44 @@ const SHADOW_MAP_SIZE = 2048;
 const WATER_NORMALS_URL =
   'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r170/examples/textures/waternormals.jpg';
 
-// Maldives Noon 相当の固定プリセット
-const PRESET = {
-  waterAlpha: 0.5,
-  turbidity: 3,
-  rayleigh: 0.6,
-  waterColor: 0x30e8da,
-  sunElevation: 50,
-  sunAzimuth: 235,
-  distortionScale: 2.6,
-  fogDensity: 0.00002,
+// 時刻モード: 昼のターコイズラグーン / 夕暮れの鏡の海
+const MODES = {
+  noon: {
+    waterAlpha: 0.5,          // 半透明 — 海底と魚が透ける
+    turbidity: 3,
+    rayleigh: 0.6,
+    waterColor: 0x30e8da,
+    sunElevation: 50,
+    sunAzimuth: 235,
+    distortionScale: 2.6,
+    fogColor: 0xaadcee,
+    fogDensity: 0.00002,
+    exposure: 0.35,
+    sunIntensity: 2.4,
+    sunColor: 0xffffff,
+    hemiIntensity: 0.6,
+    waterSunColor: 0xffffff,
+  },
+  sunset: {
+    waterAlpha: 0.96,         // ほぼ不透明 — 水面は空を映す鏡になる
+    turbidity: 10,
+    rayleigh: 3,
+    waterColor: 0x001e0f,     // 公式oceanデモと同じ暗い深緑
+    sunElevation: 2.5,
+    sunAzimuth: 188,          // 桟橋の先（島の方向）に光の道ができる
+    distortionScale: 3.7,
+    fogColor: 0x2a1a10,
+    fogDensity: 0.00012,
+    exposure: 0.5,
+    sunIntensity: 1.1,
+    sunColor: 0xff7733,
+    hemiIntensity: 0.15,
+    waterSunColor: 0xffd9a0,
+  },
 };
+const PRESET = MODES.noon;
 
-export function createOcean(scene, { swellEnabled = true } = {}) {
+export function createOcean(scene, { swellEnabled = true, renderer = null } = {}) {
   const sun = new THREE.Vector3();
   const phi = THREE.MathUtils.degToRad(90 - PRESET.sunElevation);
   const theta = THREE.MathUtils.degToRad(PRESET.sunAzimuth);
@@ -92,10 +117,43 @@ export function createOcean(scene, { swellEnabled = true } = {}) {
   sunLight.position.copy(sun).multiplyScalar(SUN_LIGHT_DISTANCE).add(sunLight.target.position);
   scene.add(sunLight, sunLight.target);
 
-  scene.add(new THREE.HemisphereLight(0xbfd8e8, 0x5fc8b8, 0.6));
+  const hemiLight = new THREE.HemisphereLight(0xbfd8e8, 0x5fc8b8, 0.6);
+  scene.add(hemiLight);
   scene.add(new THREE.AmbientLight(0xffffff, 0.12));
 
-  scene.fog = new THREE.FogExp2(0xaadcee, PRESET.fogDensity);
+  scene.fog = new THREE.FogExp2(PRESET.fogColor, PRESET.fogDensity);
 
-  return { water, sky, sunDir: sun };
+  // 時刻モードの切替（昼のラグーン ⇄ 夕暮れの鏡の海）。
+  // 太陽・空・水・霧・露出・ライトをまとめて差し替える
+  function setMode(name) {
+    const m = MODES[name];
+    if (!m) {
+      console.error(`未知の時刻モードです: ${name}`);
+      return;
+    }
+    const mPhi = THREE.MathUtils.degToRad(90 - m.sunElevation);
+    const mTheta = THREE.MathUtils.degToRad(m.sunAzimuth);
+    sun.setFromSphericalCoords(1, mPhi, mTheta);
+
+    sky.turbidity.value = m.turbidity;
+    sky.rayleigh.value = m.rayleigh;
+    sky.sunPosition.value.copy(sun);
+
+    water.sunDirection.value.copy(sun).normalize();
+    water.waterColor.value.set(m.waterColor);
+    water.distortionScale.value = m.distortionScale;
+    water.alpha.value = m.waterAlpha;
+    water.sunColor.value.set(m.waterSunColor);
+
+    sunLight.position.copy(sun).multiplyScalar(SUN_LIGHT_DISTANCE).add(sunLight.target.position);
+    sunLight.color.set(m.sunColor);
+    sunLight.intensity = m.sunIntensity;
+    hemiLight.intensity = m.hemiIntensity;
+
+    scene.fog.color.set(m.fogColor);
+    scene.fog.density = m.fogDensity;
+    if (renderer) renderer.toneMappingExposure = m.exposure;
+  }
+
+  return { water, sky, sunDir: sun, setMode };
 }
