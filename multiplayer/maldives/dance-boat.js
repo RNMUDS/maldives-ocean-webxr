@@ -10,8 +10,8 @@
 // 時刻ベースの決定的アニメーション（全プレイヤーがほぼ同じ光景を見る）。
 import * as THREE from 'three';
 
-const PATH_CENTER = new THREE.Vector3(-32, 0, -48);
-const PATH_RADIUS = 26;
+const PATH_CENTER = new THREE.Vector3(-50, 0, -52);
+const PATH_RADIUS = 28;
 const BOAT_SPEED = 0.04;
 const BEAT_HZ = 2.2;            // 約132BPM
 const DANCE_PERIOD = 10.9;      // フェーズ一巡の長さ(s) ≒ 24拍
@@ -65,7 +65,7 @@ function createKayak() {
   // 先細りの舳先・船尾（潰した四角錐）
   for (const [z, len] of [[2.4, 1.2], [-2.4, 0.8]]) {
     const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.6, len, 4), camo);
-    tip.rotation.x = (z > 0 ? -1 : 1) * Math.PI / 2;
+    tip.rotation.x = (z > 0 ? 1 : -1) * Math.PI / 2; // 尖った側を船の外へ向ける
     tip.rotation.y = Math.PI / 4;
     tip.scale.set(0.71, 1, 0.31);
     tip.position.set(0, 0.13, z + (z > 0 ? len / 2 : -len / 2));

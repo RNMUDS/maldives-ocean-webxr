@@ -133,12 +133,56 @@ class MaldivesSpace extends SpaceCore {
     this.danceBoat = createDanceBoat(this.scene);
     createClouds(this.scene);
     this._buildScreen();
+    this._setupBoatAudio();
 
     window.addEventListener('resize', () => {
       this.camera.aspect = window.innerWidth / window.innerHeight;
       this.camera.updateProjectionMatrix();
       this.renderer.setSize(window.innerWidth, window.innerHeight);
     });
+  }
+
+  // カヤックのスピーカー: 参照動画の音声を船の位置から空間再生する。
+  // 距離減衰つきなので船が近くを通った時だけ聞こえる
+  _setupBoatAudio() {
+    const listener = new THREE.AudioListener();
+    this.camera.add(listener);
+    const sound = new THREE.PositionalAudio(listener);
+    sound.setRefDistance(7);
+    sound.setRolloffFactor(1.5);
+    sound.setLoop(true);
+    sound.setVolume(0.9);
+    this.danceBoat.boat.add(sound);
+
+    new THREE.AudioLoader().load(
+      './assets/yorunoodoriko.m4a',
+      (buffer) => {
+        sound.setBuffer(buffer);
+        const tryPlay = () => {
+          if (sound.isPlaying) return true;
+          const ctx = listener.context;
+          if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+          try { sound.play(); } catch {}
+          return sound.isPlaying;
+        };
+        // ログイン操作直後なら再生できる。ブロックされた場合は次の操作で開始
+        if (!tryPlay()) {
+          const once = () => {
+            if (tryPlay()) {
+              window.removeEventListener('pointerdown', once);
+              window.removeEventListener('keydown', once);
+              window.removeEventListener('touchstart', once);
+            }
+          };
+          window.addEventListener('pointerdown', once);
+          window.addEventListener('keydown', once);
+          window.addEventListener('touchstart', once);
+        }
+      },
+      undefined,
+      (e) => console.warn('[maldives] boat audio load failed:', e)
+    );
+    this._boatAudio = sound;
   }
 
   // 沖合の巨大スクリーン（共有が無い間は案内画面）
