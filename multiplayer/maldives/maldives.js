@@ -83,7 +83,9 @@ class MaldivesSpace extends SpaceCore {
     this._setupScene();
     this._setupControls();
     setLoading('シェーダーをコンパイル中…');
-    await this.renderer.compileAsync(this.scene, this.camera);
+    // 事前コンパイルに失敗しても入室は続行する（初回フレームで遅延コンパイル）
+    try { await this.renderer.compileAsync(this.scene, this.camera); }
+    catch (e) { console.warn('[maldives] compileAsync failed — continuing:', e?.message ?? e); }
     this._showUI();
     this._loop();
     setLoading('接続中…');
@@ -99,7 +101,12 @@ class MaldivesSpace extends SpaceCore {
   async _setupRenderer() {
     this.canvas = document.getElementById('c');
     let renderer = null;
-    if (navigator.gpu) {
+    // iOS/iPadOSのSafariはWebGPUが新しく、本シーンの大規模TSLコンパイルで
+    // 固まる事例があるため、最初からWebGL2経路に固定する（/gw/も同方針で安定）
+    const isIOS =
+      /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (!isIOS && navigator.gpu) {
       try {
         renderer = new THREE.WebGPURenderer({ canvas: this.canvas, antialias: true });
         await renderer.init();
