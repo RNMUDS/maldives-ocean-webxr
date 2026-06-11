@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>MALDIVES OCEAN RESORT — 中村ゼミ</title>
+<title>INTERNSHIP FORUM — オーシャンリゾート説明会場</title>
 <link rel="icon" href="data:,">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -59,6 +59,8 @@
   #voice-btn { top: 12px; right: 12px; }
   #screen-share-btn { top: 64px; right: 12px; }
   #time-btn { top: 116px; right: 12px; }
+  #broadcast-btn { top: 168px; right: 12px; }
+  #broadcast-btn.active { background: linear-gradient(135deg,#d4762b,#f0a93c); border-color: rgba(240,180,80,.8); color:#3a2408; }
   #screen-share-btn.active { background: linear-gradient(135deg,#1f9fa8,#36e2d2); border-color: rgba(90,230,215,.8); color:#04282d; }
 
   #hint { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 40;
@@ -81,29 +83,28 @@
   <!-- name-only login -->
   <div id="login">
     <form id="login-card">
-      <h1>MALDIVES OCEAN RESORT 🌊</h1>
-      <div class="sub">モルディブの水上ヴィラリゾートへようこそ。<br>名前を入れるだけで入場できます。</div>
+      <h1>INTERNSHIP FORUM 🌊</h1>
+      <div class="sub">インターンシップ説明会・交流のバーチャル会場へようこそ。<br>舞台はモルディブの水上ヴィラリゾート。名前を入れるだけで入場できます。</div>
       <label for="name-input">名前（ニックネーム可）</label>
       <input id="name-input" type="text" maxlength="30" autocomplete="name" placeholder="例: なかむら">
       <button id="enter-btn" type="submit">入場する</button>
       <div id="login-err"></div>
       <div id="login-note">
         同じ空間にいる人とアバター・音声（🎙️）・画面共有（🖥️ 沖合の巨大スクリーン）でつながります。<br>
-        音声と共有はこの空間内だけに届きます。<br>
-        <span style="opacity:.7">3Dモデル: "Wooden Boat" by o0ozexo0o
-        (<a href="https://sketchfab.com/3d-models/wooden-boat-55118b23a5494e4b81eed831b9f8c871" target="_blank" rel="noopener">Sketchfab</a>, CC BY 4.0)</span>
+        音声と共有はこの空間内だけに届きます。
       </div>
     </form>
   </div>
 
   <div id="hud" class="hidden"><span id="hud-name">--</span>
-    <span style="opacity:.5;margin:0 6px;">|</span>🌊 MALDIVES
+    <span style="opacity:.5;margin:0 6px;">|</span>🌊 INTERNSHIP FORUM
     <span style="opacity:.5;margin:0 6px;">|</span><span id="hud-count">1</span>人</div>
   <div id="share-label"></div>
 
   <button id="voice-btn" class="iconbtn hidden" title="マイク ON/OFF" aria-label="マイク ON/OFF"><i>🔇</i></button>
   <button id="screen-share-btn" class="iconbtn hidden" title="画面共有（沖合の巨大スクリーンに表示）" aria-label="画面共有">🖥️</button>
   <button id="time-btn" class="iconbtn hidden" title="夕暮れにする" aria-label="時刻の切替">🌅</button>
+  <button id="broadcast-btn" class="iconbtn hidden" title="全体配信（全員に声を届ける）" aria-label="全体配信">📢</button>
 
   <div id="crosshair" style="display:none"></div>
   <div id="hint" class="hidden">

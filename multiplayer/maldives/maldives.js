@@ -68,6 +68,9 @@ class MaldivesSpace extends SpaceCore {
     this.yaw = 0;                 // 桟橋の先（-Z、ヴィラと島）を向く
     this.pitch = -0.02;
     this.position = new THREE.Vector3(0, DECK_HEIGHT + EYE_HEIGHT, 6);
+    // 全体配信（ブロードキャスト）中の参加者の socket.id（サーバーと同期）
+    this.broadcastingSockets = new Set();
+    this._broadcasting = false;
     // screen-share state: producerId → { texture, videoEl, socketId, userName }
     this._shares = new Map();
     this._activeShareId = null;
@@ -90,23 +93,63 @@ class MaldivesSpace extends SpaceCore {
     this._loop();
     setLoading('接続中…');
     await this._setupMultiplayer().catch((e) => console.warn('[maldives] mp:', e));
+    this._wireBroadcastSync();
     this._setupVoice()
       .then(() => this._wireScreenShare())
       .catch((e) => console.warn('[maldives] voice:', e));
     hideLoading();
   }
 
+  // 全体配信の状態同期（/gw/と同じサーバーイベントを利用）。
+  // 配信中の人の声は距離に関係なく全員にフルボリュームで届く
+  _wireBroadcastSync() {
+    const raw = this.socket?.socket;
+    if (!raw) return;
+    raw.on('gw-broadcast-init', (d) => {
+      this.broadcastingSockets = new Set(Array.isArray(d?.socketIds) ? d.socketIds : []);
+    });
+    raw.on('gw-broadcast-mode', (d) => {
+      if (!d?.socketId) return;
+      if (d.on) this.broadcastingSockets.add(d.socketId);
+      else this.broadcastingSockets.delete(d.socketId);
+    });
+  }
+
+  // 空間音響の距離減衰を上書きして、配信中の声をフルボリュームにする。
+  // SpaceCoreが_syncTransform内で voice.updateSpatialAudio() を呼んだ直後に効かせる
+  _syncTransform() {
+    super._syncTransform();
+    if (!this.voice || this.broadcastingSockets.size === 0) return;
+    for (const [producerId, entry] of this.voice.consumers ?? []) {
+      const socketId = this.voice.producerToSocket?.get(producerId);
+      if (!socketId || !this.broadcastingSockets.has(socketId)) continue;
+      if (entry.audioEl) entry.audioEl.volume = 1.0;
+      if (entry.consumer?.paused) { try { entry.consumer.resume(); } catch {} }
+    }
+  }
+
   // 時刻モード切替ボタン（昼 ⇄ 夕暮れ）。各自のクライアントだけに効く
   _wireExtraUI() {
     const btn = document.getElementById('time-btn');
-    if (!btn) return;
-    btn.classList.remove('hidden');
-    this._timeMode = 'noon';
-    btn.addEventListener('click', () => {
-      this._timeMode = this._timeMode === 'noon' ? 'sunset' : 'noon';
-      this.ocean.setMode(this._timeMode);
-      btn.textContent = this._timeMode === 'noon' ? '🌅' : '☀️';
-      btn.title = this._timeMode === 'noon' ? '夕暮れにする' : '昼にする';
+    if (btn) {
+      btn.classList.remove('hidden');
+      this._timeMode = 'noon';
+      btn.addEventListener('click', () => {
+        this._timeMode = this._timeMode === 'noon' ? 'sunset' : 'noon';
+        this.ocean.setMode(this._timeMode);
+        btn.textContent = this._timeMode === 'noon' ? '🌅' : '☀️';
+        btn.title = this._timeMode === 'noon' ? '夕暮れにする' : '昼にする';
+      });
+    }
+
+    // 全体配信（📢）: ONの間、自分の声が全員に距離減衰なしで届く
+    const bcBtn = document.getElementById('broadcast-btn');
+    bcBtn?.classList.remove('hidden');
+    bcBtn?.addEventListener('click', () => {
+      this._broadcasting = !this._broadcasting;
+      try { this.socket?.socket?.emit('gw-broadcast-mode', { on: this._broadcasting }); } catch {}
+      bcBtn.classList.toggle('active', this._broadcasting);
+      bcBtn.title = this._broadcasting ? '全体配信を終了' : '全体配信（全員に声を届ける）';
     });
   }
 
